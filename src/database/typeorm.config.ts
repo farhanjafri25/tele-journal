@@ -15,7 +15,7 @@ const envPath = path.join(
   export const postGresConfig: TypeOrmModuleOptions = {
     type: 'postgres',
     url: `${process.env.DATABASE_URL}`,
-    synchronize: true,
+    synchronize: false,
     entities: [join(__dirname, '..', '**', '**', '*.entity.{js,ts}')],
     retryAttempts: 5,
     retryDelay: 5000,
