@@ -23,6 +23,6 @@ export class AiService {
             model: env.OPENAI_CHAT_MODEL,
             messages,
         });
-        return res.choices[0]?.message?.content ?? '';
+        return res.choices[0]?.message?.content ?? ''; 
     }
 }
