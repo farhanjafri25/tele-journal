@@ -6,11 +6,15 @@ import { postGresConfig } from './database/typeorm.config';
 import { JournalModule } from './modules/journal/journal.module';
 import { UserModule } from './modules/users/user.module';
 import { AiModule } from './modules/ai/ai.module';
+import { TelegramModule } from './modules/telegram/telegram.module';
 
 @Module({
   imports: [
     TypeOrmModule.forRoot(postGresConfig),
-    JournalModule, UserModule, AiModule
+    JournalModule,
+    UserModule,
+    AiModule,
+    TelegramModule
   ],
   controllers: [AppController],
   providers: [AppService],

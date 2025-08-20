@@ -1,98 +1,187 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Telegram Journal Bot
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+A Telegram bot that allows users to journal about their everyday life and query their entries using AI-powered semantic search.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Features
 
-## Description
+- 📝 **Journal Entries**: Send any message to the bot to create a journal entry
+- 🔍 **AI-Powered Queries**: Ask questions about your journal entries using natural language
+- 📊 **Insights & Summaries**: Get AI-generated summaries of your journaling patterns
+- 📈 **Statistics**: Track your journaling habits and progress
+- 🧠 **Semantic Search**: Uses OpenAI embeddings for intelligent entry retrieval
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## Tech Stack
 
-## Project setup
+- **Backend**: NestJS with TypeScript
+- **Database**: PostgreSQL with pgvector extension
+- **AI**: Mistral AI (chat & embeddings) or OpenAI (optional)
+- **Bot**: Telegram Bot API
+- **ORM**: TypeORM
 
-```bash
-$ npm install
+## Setup Instructions
+
+### Prerequisites
+
+1. **PostgreSQL with pgvector**: You need a PostgreSQL database with the pgvector extension installed
+2. **Telegram Bot Token**: Create a bot via [@BotFather](https://t.me/botfather) on Telegram
+3. **AI Provider**: Choose one:
+   - **Mistral AI** (Recommended): Get your API key from [Mistral](https://console.mistral.ai/) - Free tier available
+   - **OpenAI** (Optional): Get your API key from [OpenAI](https://platform.openai.com/) - Requires paid plan
+
+### Installation
+
+1. **Clone and install dependencies**:
+   ```bash
+   git clone <your-repo>
+   cd tele-journal
+   npm install
+   ```
+
+2. **Environment Configuration**:
+   ```bash
+   cp .env.example .env
+   ```
+
+   Fill in your environment variables:
+   ```env
+   NODE_ENV=development
+   PORT=3000
+
+   # Get from @BotFather on Telegram
+   TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
+
+   # PostgreSQL with pgvector extension
+   DATABASE_URL=postgresql://username:password@localhost:5432/tele_journal
+
+   # Get from OpenAI
+   OPENAI_API_KEY=your_openai_api_key_here
+   OPENAI_EMBEDDING_MODEL=text-embedding-3-small
+   OPENAI_CHAT_MODEL=gpt-4o-mini
+   ```
+
+3. **Database Setup**:
+   ```bash
+   # Run migrations to set up tables and pgvector
+   npm run migration:run
+   ```
+
+4. **Start the application**:
+   ```bash
+   # Development
+   npm run start:dev
+
+   # Production
+   npm run start:prod
+   ```
+
+## Bot Deployment Modes
+
+### 🔄 **Polling Mode (Default - Recommended for Development)**
+
+The bot uses polling by default, which means:
+- ✅ **No webhook setup required**
+- ✅ **Works behind firewalls/NAT**
+- ✅ **Perfect for development and testing**
+- ✅ **Easy to set up**
+
+Just leave `TELEGRAM_WEBHOOK_URL` empty in your `.env` file.
+
+### 🌐 **Webhook Mode (Recommended for Production)**
+
+For production deployments, you can use webhook mode:
+
+1. **Set up your domain**: You need a public HTTPS domain
+2. **Configure webhook URL**: Set `TELEGRAM_WEBHOOK_URL=https://yourdomain.com` in `.env`
+3. **Deploy**: The bot will automatically set up the webhook
+
+**Webhook Benefits:**
+- ⚡ **Faster response times**
+- 🔋 **Lower server resource usage**
+- 📈 **Better for high-traffic bots**
+- 🔒 **More secure (HTTPS required)**
+
+**Webhook Requirements:**
+- Public HTTPS domain (SSL certificate required)
+- Port 443, 80, 88, or 8443
+- Valid SSL certificate
+
+### 🚀 **Quick Start (No Setup Required)**
+
+For immediate testing, just:
+1. Get your bot token from [@BotFather](https://t.me/botfather)
+2. Add it to `.env` as `TELEGRAM_BOT_TOKEN=your_token`
+3. Run `npm run start:dev`
+4. Your bot is ready! 🎉
+
+## Bot Commands
+
+- `/start` - Initialize the bot and get welcome message
+- `/help` - Show available commands and usage instructions
+- `/query <question>` - Ask questions about your journal entries
+- `/summary` - Get an AI-generated summary of recent entries
+- `/stats` - View your journaling statistics
+
+## Usage Examples
+
+### Journaling
+Just send any message to the bot:
+```
+"Had a great day at work today. Finished the project I've been working on for weeks!"
 ```
 
-## Compile and run the project
-
-```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+### Querying
+Ask questions about your entries:
+```
+/query How was my mood last week?
+/query What projects have I been working on?
+/query Tell me about my recent achievements
 ```
 
-## Run tests
+## Database Schema
 
-```bash
-# unit tests
-$ npm run test
+### Users Table
+- `id` - Primary key
+- `telegram_id` - Telegram user ID (unique)
+- `username` - Telegram username
+- `created_at` - Account creation timestamp
 
-# e2e tests
-$ npm run test:e2e
+### Journal Table
+- `id` - Primary key
+- `user_id` - Foreign key to users
+- `entry` - Journal entry text
+- `tags` - Optional tags array
+- `embeddings` - Vector embeddings for semantic search
+- `created_at` - Entry creation timestamp
 
-# test coverage
-$ npm run test:cov
+## Development
+
+### Scripts
+- `npm run start:dev` - Start in development mode with hot reload
+- `npm run build` - Build the application
+- `npm run test` - Run tests
+- `npm run migration:generate` - Generate new migration
+- `npm run migration:run` - Run pending migrations
+
+### Project Structure
+```
+src/
+├── modules/
+│   ├── ai/           # OpenAI integration
+│   ├── journal/      # Journal entries management
+│   ├── telegram/     # Telegram bot service
+│   └── users/        # User management
+├── database/         # Database configuration
+└── migrations/       # Database migrations
 ```
 
-## Deployment
+## Contributing
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ npm install -g mau
-$ mau deploy
-```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests if applicable
+5. Submit a pull request
 
 ## License
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+This project is licensed under the MIT License.
