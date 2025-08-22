@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: tele-journal
+    env: node
+    plan: free
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start:prod
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_OPTIONS
+        value: "--max-old-space-size=512"
+    # Add your environment variables here
+    # - key: TELEGRAM_BOT_TOKEN
+    #   sync: false
+    # - key: DATABASE_URL
+    #   sync: false
+    # - key: ASSEMBLYAI_API_KEY
+    #   sync: false
+    # - key: MISTRAL_API_KEY
+    #   sync: false
