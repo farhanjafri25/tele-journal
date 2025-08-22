@@ -2,7 +2,9 @@ import { Injectable, Logger } from "@nestjs/common";
 import { AiRepository } from "../repositories/ai.connection";
 import OpenAI from "openai";
 import { Mistral } from "@mistralai/mistralai";
+import { AssemblyAI } from 'assemblyai';
 import { env } from "../../../../env";
+import * as fs from 'fs-extra';
 
 export interface ChatMessage {
     role: 'system' | 'user' | 'assistant';
@@ -14,6 +16,7 @@ export class AiService {
     private readonly logger = new Logger(AiService.name);
     private openAi?: OpenAI;
     private mistral?: Mistral;
+    private assemblyAI?: AssemblyAI;
 
     constructor(
         private readonly aiRepository: AiRepository,
@@ -52,6 +55,46 @@ export class AiService {
             throw new Error('No chat provider available');
         }
     }
+
+    async speechToText(audioFilePath: string): Promise<string> {
+        return this.speechToTextWithAssemblyAI(audioFilePath);
+    }
+
+    private async speechToTextWithAssemblyAI(audioFilePath: string): Promise<string> {
+        if (!env.ASSEMBLYAI_API_KEY) {
+            throw new Error('AssemblyAI API key required for speech-to-text');
+        }
+
+        if (!this.assemblyAI) {
+            this.assemblyAI = new AssemblyAI({ apiKey: env.ASSEMBLYAI_API_KEY });
+        }
+
+        try {
+            this.logger.log('Starting AssemblyAI transcription...');
+
+            // Upload and transcribe the audio file
+            const transcript = await this.assemblyAI.transcripts.transcribe({
+                audio: audioFilePath,
+                speech_model: 'best', // Use the best available model
+            });
+
+            if (transcript.status === 'error') {
+                throw new Error(`AssemblyAI transcription failed: ${transcript.error}`);
+            }
+
+            if (!transcript.text) {
+                throw new Error('No transcription text returned from AssemblyAI');
+            }
+
+            this.logger.log('AssemblyAI transcription completed successfully', transcript.text);
+            return transcript.text;
+        } catch (error) {
+            this.logger.error('Error in AssemblyAI speech-to-text:', error);
+            throw new Error('Failed to convert speech to text with AssemblyAI');
+        }
+    }
+
+
 
     private async embedWithOpenAI(text: string): Promise<number[]> {
         const res = await this.openAi!.embeddings.create({

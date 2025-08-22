@@ -4,6 +4,11 @@ import { env } from '../../../../env';
 import { UserService } from '../../users/services/user.service';
 import { JournalService } from '../../journal/services/journal.service';
 import { JournalQueryService } from '../../journal/services/journal-query.service';
+import { AiService } from '../../ai/services/ai.service';
+import * as fs from 'fs-extra';
+import * as path from 'path';
+import axios from 'axios';
+
 
 @Injectable()
 export class TelegramBotService implements OnModuleInit {
@@ -14,6 +19,7 @@ export class TelegramBotService implements OnModuleInit {
     private readonly userService: UserService,
     private readonly journalService: JournalService,
     private readonly journalQueryService: JournalQueryService,
+    private readonly aiService: AiService,
   ) {}
 
   onModuleInit() {
@@ -74,12 +80,23 @@ export class TelegramBotService implements OnModuleInit {
         return;
       }
 
-      // Skip if it's not a text message
-      if (!msg.text) {
+      // Handle text messages
+      if (msg.text) {
+        await this.handleJournalEntry(msg);
         return;
       }
 
-      await this.handleJournalEntry(msg);
+      // Handle voice messages
+      if (msg.voice) {
+        await this.handleVoiceMessage(msg);
+        return;
+      }
+
+      // Handle audio messages (voice notes)
+      if (msg.audio) {
+        await this.handleAudioMessage(msg);
+        return;
+      }
     });
   }
 
@@ -102,12 +119,12 @@ export class TelegramBotService implements OnModuleInit {
 
 I'm here to help you capture your thoughts, experiences, and reflections. Here's how I work:
 
-📝 **Journaling**: Just send me any message and I'll save it as a journal entry
+📝 **Journaling**: Send me text messages or 🎤 voice messages - I'll save them as journal entries
 🔍 **Querying**: Use /query <your question> to ask about your past entries
 📊 **Summary**: Use /summary to get insights about your recent entries
 📈 **Stats**: Use /stats to see your journaling statistics
 
-Start by sharing what's on your mind today! ✨
+Start by sharing what's on your mind today - type or speak! ✨
       `;
       
       await this.bot.sendMessage(chatId, welcomeMessage);
@@ -124,7 +141,9 @@ Start by sharing what's on your mind today! ✨
 🤖 **Journal Bot Commands**
 
 📝 **Journaling**:
-• Just type any message to create a journal entry
+• Type any message to create a journal entry
+• 🎤 Send voice messages - I'll transcribe them automatically!
+• 🎵 Send audio files - I'll convert speech to text
 • I'll automatically save and analyze your thoughts
 
 🔍 **Querying**:
@@ -141,6 +160,7 @@ Start by sharing what's on your mind today! ✨
 
 💡 **Tips**:
 • Be descriptive in your entries for better insights
+• Voice messages are great for quick journaling on the go!
 • Ask specific questions for more accurate responses
 • Regular journaling helps me understand you better!
     `;
@@ -291,6 +311,151 @@ ${totalEntries === 0 ?
     } catch (error) {
       this.logger.error('Error processing update:', error);
       throw error;
+    }
+  }
+
+  private async handleVoiceMessage(msg: TelegramBot.Message) {
+    const chatId = msg.chat.id;
+    const telegramId = msg.from?.id;
+
+    if (!telegramId || !msg.voice) {
+      return;
+    }
+
+    try {
+      // Show typing indicator
+      await this.bot.sendChatAction(chatId, 'typing');
+
+      // Send processing message
+      const processingMsg = await this.bot.sendMessage(chatId, '🎤 Processing voice message...');
+
+      // Download the voice file
+      const fileId = msg.voice.file_id;
+      const audioFilePath = await this.downloadAudioFile(fileId, 'voice');
+
+      // Convert speech to text
+      const transcribedText = await this.aiService.speechToText(audioFilePath);
+      console.log(`Transcribed text: ${transcribedText}`);
+      
+      // Clean up the audio file
+      await fs.remove(audioFilePath);
+
+      if (!transcribedText.trim()) {
+        await this.bot.editMessageText('❌ Could not transcribe the voice message. Please try again.', {
+          chat_id: chatId,
+          message_id: processingMsg.message_id,
+        });
+        return;
+      }
+
+      // Find or create user
+      const user = await this.userService.findOrCreateUser(telegramId, msg.from?.username);
+
+      // Save journal entry with transcribed text
+      await this.journalService.createEntry(user.id, transcribedText);
+
+      // Update the processing message with success
+      await this.bot.editMessageText(
+        `✅ Voice message saved!\n\n📝 Transcribed: "${transcribedText}"`,
+        {
+          chat_id: chatId,
+          message_id: processingMsg.message_id,
+        }
+      );
+    } catch (error) {
+      this.logger.error('Error processing voice message:', error);
+      await this.bot.sendMessage(chatId, '❌ Sorry, I couldn\'t process your voice message. Please try again.');
+    }
+  }
+
+  private async handleAudioMessage(msg: TelegramBot.Message) {
+    const chatId = msg.chat.id;
+    const telegramId = msg.from?.id;
+
+    if (!telegramId || !msg.audio) {
+      return;
+    }
+
+    try {
+      // Show typing indicator
+      await this.bot.sendChatAction(chatId, 'typing');
+
+      // Send processing message
+      const processingMsg = await this.bot.sendMessage(chatId, '🎵 Processing audio message...');
+
+      // Download the audio file
+      const fileId = msg.audio.file_id;
+      const audioFilePath = await this.downloadAudioFile(fileId, 'audio');
+
+      // Convert speech to text
+      const transcribedText = await this.aiService.speechToText(audioFilePath);
+
+      // Clean up the audio file
+      await fs.remove(audioFilePath);
+
+      if (!transcribedText.trim()) {
+        await this.bot.editMessageText('❌ Could not transcribe the audio message. Please try again.', {
+          chat_id: chatId,
+          message_id: processingMsg.message_id,
+        });
+        return;
+      }
+
+      // Find or create user
+      const user = await this.userService.findOrCreateUser(telegramId, msg.from?.username);
+
+      // Save journal entry with transcribed text
+      await this.journalService.createEntry(user.id, transcribedText);
+
+      // Update the processing message with success
+      await this.bot.editMessageText(
+        `✅ Audio message saved!\n\n📝 Transcribed: "${transcribedText}"`,
+        {
+          chat_id: chatId,
+          message_id: processingMsg.message_id,
+        }
+      );
+    } catch (error) {
+      this.logger.error('Error processing audio message:', error);
+      await this.bot.sendMessage(chatId, '❌ Sorry, I couldn\'t process your audio message. Please try again.');
+    }
+  }
+
+  private async downloadAudioFile(fileId: string, type: 'voice' | 'audio'): Promise<string> {
+    try {
+      // Get file info from Telegram
+      const file = await this.bot.getFile(fileId);
+
+      if (!file.file_path) {
+        throw new Error('File path not available');
+      }
+
+      // Download the file
+      const fileUrl = `https://api.telegram.org/file/bot${env.TELEGRAM_BOT_TOKEN}/${file.file_path}`;
+      const response = await axios.get(fileUrl, { responseType: 'stream' });
+
+      // Create temp directory if it doesn't exist
+      const tempDir = path.join(process.cwd(), 'temp');
+      await fs.ensureDir(tempDir);
+
+      // Save the file directly (AssemblyAI can handle .ogg files)
+      const extension = type === 'voice' ? 'ogg' : 'mp3';
+      const fileName = `${type}_${Date.now()}_${Math.random().toString(36).substring(7)}.${extension}`;
+      const filePath = path.join(tempDir, fileName);
+
+      const writer = fs.createWriteStream(filePath);
+      response.data.pipe(writer);
+
+      return new Promise((resolve, reject) => {
+        writer.on('finish', () => {
+          this.logger.log(`Audio file downloaded: ${filePath}`);
+          resolve(filePath);
+        });
+        writer.on('error', reject);
+      });
+    } catch (error) {
+      this.logger.error('Error downloading audio file:', error);
+      throw new Error('Failed to download audio file');
     }
   }
 }
