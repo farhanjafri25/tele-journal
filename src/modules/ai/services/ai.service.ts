@@ -1,5 +1,4 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { AiRepository } from "../repositories/ai.connection";
 import OpenAI from "openai";
 import { Mistral } from "@mistralai/mistralai";
 import { AssemblyAI } from 'assemblyai';
@@ -19,7 +18,6 @@ export class AiService {
     private assemblyAI?: AssemblyAI;
 
     constructor(
-        private readonly aiRepository: AiRepository,
     ) {
         this.initializeProviders();
     }
