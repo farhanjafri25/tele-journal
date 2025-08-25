@@ -4,7 +4,7 @@ import { Mistral } from "@mistralai/mistralai";
 import { AssemblyAI } from 'assemblyai';
 import { env } from "../../../../env";
 import * as fs from 'fs-extra';
-import { reminderTools, CreateReminderParams, ListRemindersParams, UpdateReminderParams, DeleteReminderParams } from '../../reminders/tools/reminder-tools';
+import { reminderTools, CreateReminderParams, ListRemindersParams, UpdateReminderParams, DeleteReminderParams, MatchRemindersForDeletionParams } from '../../reminders/tools/reminder-tools';
 
 export interface ChatMessage {
     role: 'system' | 'user' | 'assistant';
@@ -144,6 +144,48 @@ Examples:
         }
     }
 
+    async parseSmartDeletionRequest(userMessage: string, userTimezone: string = 'Asia/Kolkata'): Promise<any> {
+        try {
+            const currentLocalTime = new Date().toLocaleString('en-US', { timeZone: userTimezone });
+            const systemPrompt = `You are a helpful assistant that parses natural language requests to find and delete reminders.
+
+Current date and time in user's timezone (${userTimezone}): ${currentLocalTime}
+
+The user wants to delete a reminder based on their description. Parse their request and extract:
+1. Key words or phrases that describe the reminder content
+2. Time context (today, tomorrow, specific times, etc.)
+3. Your confidence level in the match
+
+Use the match_reminders_for_deletion function to structure the search criteria.
+
+Examples:
+- "delete my call mom reminder for today" → keywords: ["call", "mom"], timeContext: "today", confidence: "high"
+- "remove the medicine reminder" → keywords: ["medicine"], confidence: "medium"
+- "delete the 6pm reminder" → keywords: [], timeContext: "6pm", confidence: "medium"
+- "cancel tomorrow's meeting" → keywords: ["meeting"], timeContext: "tomorrow", confidence: "high"
+
+Be intelligent about extracting meaningful keywords and understanding time references.`;
+
+            const userMessageFormatted = `Please help me delete this reminder: "${userMessage}"`;
+
+            const response = await this.mistral?.chat.complete({
+                model: env.MISTRAL_CHAT_MODEL,
+                messages: [
+                    { role: 'system', content: systemPrompt },
+                    { role: 'user', content: userMessageFormatted }
+                ],
+                tools: reminderTools,
+                toolChoice: 'auto'
+            });
+
+            console.log('Mistral smart deletion response:', JSON.stringify(response, null, 2));
+            return response;
+        } catch (error) {
+            this.logger.error('Error parsing smart deletion request:', error);
+            throw new Error('Failed to parse smart deletion request');
+        }
+    }
+
     async handleReminderToolCall(toolCall: any, userId: number, chatRoomId: string): Promise<any> {
         const { name, arguments: args } = toolCall.function;
         console.log(`toolCall.function`, toolCall.function);
@@ -192,6 +234,14 @@ Examples:
                 return {
                     action: 'delete_reminder',
                     params: parsedArgs as DeleteReminderParams,
+                    userId,
+                    chatRoomId
+                };
+
+            case 'match_reminders_for_deletion':
+                return {
+                    action: 'match_reminders_for_deletion',
+                    params: parsedArgs as MatchRemindersForDeletionParams,
                     userId,
                     chatRoomId
                 };

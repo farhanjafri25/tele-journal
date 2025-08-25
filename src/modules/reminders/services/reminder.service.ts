@@ -142,13 +142,15 @@ export class ReminderService {
   }
 
   async markReminderAsExecuted(reminder: Reminder): Promise<void> {
+    console.log(`Marking reminder as executed: ${reminder}`);
+    
     const nextExecution = this.calculateNextExecution(
       reminder.nextExecution,
       reminder.type,
       reminder.recurrencePattern
     );
 
-    await this.reminderRepository.markAsExecuted(reminder.id, nextExecution ?? undefined);
+    await this.reminderRepository.markAsExecuted(reminder.id, nextExecution ?? undefined, reminder.type as ReminderType | null);
   }
 
   private calculateNextExecution(
@@ -158,7 +160,7 @@ export class ReminderService {
   ): Date | null {
     if (type === ReminderType.ONCE) {
       // For one-time reminders, the next execution is the scheduled time itself
-      return null;
+      return new Date(currentTime);
     }
 
     const next = new Date(currentTime);

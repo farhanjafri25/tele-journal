@@ -143,6 +143,37 @@ export const reminderTools = [
         required: ["reminderId"]
       }
     }
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "match_reminders_for_deletion",
+      description: "Match existing reminders based on natural language description for deletion",
+      parameters: {
+        type: "object",
+        properties: {
+          description: {
+            type: "string",
+            description: "Natural language description of the reminder to find and delete"
+          },
+          timeContext: {
+            type: "string",
+            description: "Time context like 'today', 'tomorrow', 'this evening', specific time, etc."
+          },
+          keywords: {
+            type: "array",
+            items: { type: "string" },
+            description: "Key words or phrases that should match the reminder content"
+          },
+          confidence: {
+            type: "string",
+            enum: ["high", "medium", "low"],
+            description: "Confidence level of the match based on the description specificity"
+          }
+        },
+        required: ["description", "keywords"]
+      }
+    }
   }
 ];
 
@@ -179,4 +210,11 @@ export interface UpdateReminderParams {
 
 export interface DeleteReminderParams {
   reminderId: string;
+}
+
+export interface MatchRemindersForDeletionParams {
+  description: string;
+  timeContext?: string;
+  keywords: string[];
+  confidence?: 'high' | 'medium' | 'low';
 }

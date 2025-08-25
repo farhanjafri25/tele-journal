@@ -88,17 +88,18 @@ export class ReminderRepository {
     return (result.affected ?? 0) > 0;
   }
 
-  async markAsExecuted(id: string, nextExecution?: Date): Promise<void> {
+  async markAsExecuted(id: string, nextExecution?: Date, type: ReminderType | null | undefined = null): Promise<void> {
     // First get current execution count
     const reminder = await this.findById(id);
     const currentCount = reminder?.executionCount ?? 0;
-
+    console.log(`type`, type);
+    
     const updateData: Partial<Reminder> = {
       lastExecutedAt: new Date(),
       executionCount: currentCount + 1,
     };
 
-    if (nextExecution) {
+    if (nextExecution && type !== ReminderType.ONCE) {
       updateData.nextExecution = nextExecution;
     } else {
       // If no next execution, mark as completed for one-time reminders

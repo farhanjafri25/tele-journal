@@ -7,6 +7,7 @@ import { JournalQueryService } from '../../journal/services/journal-query.servic
 import { AiService } from '../../ai/services/ai.service';
 import { ReminderService } from '../../reminders/services/reminder.service';
 import { ReminderSchedulerService } from '../../reminders/services/reminder-scheduler.service';
+import { ReminderMatcherService } from '../../reminders/services/reminder-matcher.service';
 import { TimezoneUtils } from '../../reminders/utils/timezone.utils';
 import * as fs from 'fs-extra';
 import * as path from 'path';
@@ -25,6 +26,7 @@ export class TelegramBotService implements OnModuleInit {
     private readonly aiService: AiService,
     private readonly reminderService: ReminderService,
     private readonly reminderSchedulerService: ReminderSchedulerService,
+    private readonly reminderMatcherService: ReminderMatcherService,
   ) {}
 
   onModuleInit() {
@@ -133,6 +135,11 @@ export class TelegramBotService implements OnModuleInit {
       await this.handleCancelReminderCommand(msg, match);
     });
 
+    // Smart reminder deletion command
+    this.bot.onText(/\/delete_reminder (.+)/, async (msg, match) => {
+      await this.handleSmartDeleteReminderCommand(msg, match);
+    });
+
     // Debug command to trigger due reminders manually
     this.bot.onText(/\/test_reminders/, async (msg) => {
       await this.handleTestRemindersCommand(msg);
@@ -229,7 +236,7 @@ Start by sharing what's on your mind today - type or speak! ✨
 ⏰ **Reminders**:
 • /remind [text] - Create a smart reminder (e.g., "remind me to call mom tomorrow at 3pm")
 • /reminders - List all your active reminders
-• /cancel_reminder [ID] - Cancel a specific reminder
+• /delete_reminder [reminder description] - Cancel a specific reminder (e.g., "Delete my Reminder to go for groceries today at 6pm")
 
 ❓ **Other**:
 • /help - Show this help message
@@ -587,6 +594,60 @@ ${totalEntries === 0 ?
             chatId,
             `✅ Reminder created!\n\n📝 **${reminder.title}**\n📅 Scheduled for: ${scheduledTime}\n🔄 Type: ${reminder.type}\n\n🆔 ID: \`${reminder.id}\``
           );
+        } else if (toolResult.action === 'match_reminders_for_deletion') {
+          // Handle smart reminder matching for deletion
+          const userReminders = await this.reminderService.getUserReminders(user.id);
+          const matches = await this.reminderMatcherService.matchReminders(
+            userReminders,
+            toolResult.params,
+            userTimezone
+          );
+
+          if (matches.length === 0) {
+            await this.bot.sendMessage(
+              chatId,
+              '❌ No matching reminders found. Use /list_reminders to see all your reminders.'
+            );
+          } else if (matches.length === 1 && matches[0].score >= 70) {
+            // High confidence single match - delete directly
+            const reminder = matches[0].reminder;
+            await this.reminderService.deleteReminder(reminder.id);
+            await this.bot.sendMessage(
+              chatId,
+              `✅ Deleted reminder: **${reminder.title}**\n\n🔍 Match confidence: ${Math.round(matches[0].score)}%\n📝 Reasons: ${matches[0].reasons.join(', ')}`
+            );
+          } else {
+            // Multiple matches or low confidence - show options
+            const categorized = this.reminderMatcherService.categorizeMatches(matches);
+            let message = '🔍 **Found multiple matching reminders:**\n\n';
+
+            if (categorized.high.length > 0) {
+              message += '**High confidence matches:**\n';
+              categorized.high.forEach((match, index) => {
+                const nextTime = match.reminder.nextExecution
+                  ? TimezoneUtils.formatDateInTimezone(match.reminder.nextExecution, userTimezone)
+                  : 'Completed';
+                message += `${index + 1}. **${match.reminder.title}** (${Math.round(match.score)}%)\n`;
+                message += `   📅 Next: ${nextTime}\n`;
+                message += `   🆔 ID: \`${match.reminder.id}\`\n\n`;
+              });
+            }
+
+            if (categorized.medium.length > 0) {
+              message += '**Medium confidence matches:**\n';
+              categorized.medium.forEach((match, index) => {
+                const nextTime = match.reminder.nextExecution
+                  ? TimezoneUtils.formatDateInTimezone(match.reminder.nextExecution, userTimezone)
+                  : 'Completed';
+                message += `${index + 1}. **${match.reminder.title}** (${Math.round(match.score)}%)\n`;
+                message += `   📅 Next: ${nextTime}\n`;
+                message += `   🆔 ID: \`${match.reminder.id}\`\n\n`;
+              });
+            }
+
+            message += '\n💡 Use `/cancel_reminder [ID]` to delete a specific reminder.';
+            await this.bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
+          }
         }
       } else {
         // Fallback: Try to parse manually or use AI response text
@@ -675,6 +736,126 @@ ${totalEntries === 0 ?
     } catch (error) {
       this.logger.error('Error cancelling reminder:', error);
       await this.bot.sendMessage(chatId, '❌ Sorry, I couldn\'t cancel your reminder. Please try again.');
+    }
+  }
+
+  private async handleSmartDeleteReminderCommand(msg: TelegramBot.Message, match: RegExpExecArray | null) {
+    const chatId = msg.chat.id;
+    const telegramId = msg.from?.id;
+
+    if (!telegramId || !match || !match[1]) {
+      await this.bot.sendMessage(chatId, 'Please describe the reminder you want to delete.\n\nExamples:\n- `/delete_reminder call mom today`\n- `/delete_reminder medicine reminder`\n- `/delete_reminder the 6pm meeting`');
+      return;
+    }
+
+    try {
+      const user = await this.userService.findByTelegramId(telegramId);
+      if (!user) {
+        await this.bot.sendMessage(chatId, 'Please start the bot first with /start');
+        return;
+      }
+
+      await this.bot.sendChatAction(chatId, 'typing');
+
+      const deletionDescription = match[1];
+      const userTimezone = 'Asia/Kolkata'; // TODO: Get from user preferences
+
+      console.log(`Smart deletion request: "${deletionDescription}"`);
+
+      // Parse deletion request with AI
+      const aiResponse = await this.aiService.parseSmartDeletionRequest(deletionDescription, userTimezone);
+      console.log(`Smart deletion AI response:`, JSON.stringify(aiResponse, null, 2));
+
+      // Check if AI returned tool calls
+      const message = aiResponse.choices?.[0]?.message;
+      const toolCalls = message?.tool_calls || message?.toolCalls;
+
+      if (toolCalls && toolCalls.length > 0) {
+        const toolCall = toolCalls[0];
+        const toolResult = await this.aiService.handleReminderToolCall(toolCall, user.id, chatId.toString());
+
+        if (toolResult.action === 'match_reminders_for_deletion') {
+          // Get user's reminders and match them
+          const userReminders = await this.reminderService.getUserReminders(user.id);
+
+          if (userReminders.length === 0) {
+            await this.bot.sendMessage(chatId, '📝 You don\'t have any reminders to delete.');
+            return;
+          }
+
+          const matches = await this.reminderMatcherService.matchReminders(
+            userReminders,
+            toolResult.params,
+            userTimezone
+          );
+
+          if (matches.length === 0) {
+            await this.bot.sendMessage(
+              chatId,
+              `❌ No reminders found matching "${deletionDescription}".\n\nUse /list_reminders to see all your reminders, or try being more specific.`
+            );
+          } else if (matches.length === 1 && matches[0].score >= 70) {
+            // High confidence single match - delete directly
+            const reminder = matches[0].reminder;
+            await this.reminderService.deleteReminder(reminder.id);
+
+            const nextTime = reminder.nextExecution
+              ? TimezoneUtils.formatDateInTimezone(reminder.nextExecution, userTimezone)
+              : 'Completed';
+
+            await this.bot.sendMessage(
+              chatId,
+              `✅ **Deleted reminder successfully!**\n\n📝 **${reminder.title}**\n📅 Was scheduled for: ${nextTime}\n\n🔍 Match confidence: ${Math.round(matches[0].score)}%\n📋 Reasons: ${matches[0].reasons.join(', ')}`,
+              { parse_mode: 'Markdown' }
+            );
+          } else {
+            // Multiple matches or low confidence - show options
+            const categorized = this.reminderMatcherService.categorizeMatches(matches);
+            let responseMessage = `🔍 **Found ${matches.length} matching reminders for "${deletionDescription}":**\n\n`;
+
+            if (categorized.high.length > 0) {
+              responseMessage += '**🎯 High confidence matches:**\n';
+              categorized.high.forEach((match, index) => {
+                const nextTime = match.reminder.nextExecution
+                  ? TimezoneUtils.formatDateInTimezone(match.reminder.nextExecution, userTimezone)
+                  : 'Completed';
+                responseMessage += `${index + 1}. **${match.reminder.title}** (${Math.round(match.score)}% match)\n`;
+                responseMessage += `   📅 Next: ${nextTime}\n`;
+                responseMessage += `   🔍 Why: ${match.reasons.join(', ')}\n`;
+                responseMessage += `   🆔 ID: \`${match.reminder.id}\`\n\n`;
+              });
+            }
+
+            if (categorized.medium.length > 0) {
+              responseMessage += '**🤔 Medium confidence matches:**\n';
+              categorized.medium.forEach((match, index) => {
+                const nextTime = match.reminder.nextExecution
+                  ? TimezoneUtils.formatDateInTimezone(match.reminder.nextExecution, userTimezone)
+                  : 'Completed';
+                responseMessage += `${index + 1}. **${match.reminder.title}** (${Math.round(match.score)}% match)\n`;
+                responseMessage += `   📅 Next: ${nextTime}\n`;
+                responseMessage += `   🆔 ID: \`${match.reminder.id}\`\n\n`;
+              });
+            }
+
+            responseMessage += '\n💡 **To delete a specific reminder:**\n';
+            responseMessage += '• Use `/cancel_reminder [ID]` with the ID above\n';
+            responseMessage += '• Or try being more specific in your description';
+
+            await this.bot.sendMessage(chatId, responseMessage, { parse_mode: 'Markdown' });
+          }
+        }
+      } else {
+        // AI couldn't parse the deletion request
+        await this.bot.sendMessage(
+          chatId,
+          `❌ I couldn't understand your deletion request: "${deletionDescription}"\n\n💡 **Try these formats:**\n• \`/delete_reminder call mom today\`\n• \`/delete_reminder medicine reminder\`\n• \`/delete_reminder the 6pm meeting\`\n• \`/delete_reminder tomorrow's workout\`\n\nOr use \`/list_reminders\` to see all your reminders.`,
+          { parse_mode: 'Markdown' }
+        );
+      }
+    } catch (error) {
+      this.logger.error('Error in smart delete reminder:', error);
+      await this.bot.sendMessage(chatId, '❌ Sorry, I couldn\'t process your deletion request. Please try again or use /list_reminders to see your reminders.');
     }
   }
 
