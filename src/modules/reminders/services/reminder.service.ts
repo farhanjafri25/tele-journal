@@ -158,7 +158,7 @@ export class ReminderService {
   ): Date | null {
     if (type === ReminderType.ONCE) {
       // For one-time reminders, the next execution is the scheduled time itself
-      return new Date(currentTime);
+      return null;
     }
 
     const next = new Date(currentTime);
