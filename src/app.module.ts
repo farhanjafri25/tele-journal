@@ -7,6 +7,7 @@ import { JournalModule } from './modules/journal/journal.module';
 import { UserModule } from './modules/users/user.module';
 import { AiModule } from './modules/ai/ai.module';
 import { TelegramModule } from './modules/telegram/telegram.module';
+import { RemindersModule } from './modules/reminders/reminders.module';
 
 @Module({
   imports: [
@@ -14,7 +15,8 @@ import { TelegramModule } from './modules/telegram/telegram.module';
     JournalModule,
     UserModule,
     AiModule,
-    TelegramModule
+    TelegramModule,
+    RemindersModule
   ],
   controllers: [AppController],
   providers: [AppService],

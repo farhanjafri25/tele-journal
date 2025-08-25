@@ -4,6 +4,7 @@ import { Mistral } from "@mistralai/mistralai";
 import { AssemblyAI } from 'assemblyai';
 import { env } from "../../../../env";
 import * as fs from 'fs-extra';
+import { reminderTools, CreateReminderParams, ListRemindersParams, UpdateReminderParams, DeleteReminderParams } from '../../reminders/tools/reminder-tools';
 
 export interface ChatMessage {
     role: 'system' | 'user' | 'assistant';
@@ -89,6 +90,89 @@ export class AiService {
         } catch (error) {
             this.logger.error('Error in AssemblyAI speech-to-text:', error);
             throw new Error('Failed to convert speech to text with AssemblyAI');
+        }
+    }
+
+    async parseReminderRequest(userMessage: string, userTimezone: string = 'UTC'): Promise<any> {
+        if (!this.mistral) {
+            throw new Error('Mistral AI not initialized');
+        }
+
+        try {
+            const systemPrompt = `You are a helpful assistant that parses natural language reminder requests and converts them into structured data.
+
+Current date and time: ${new Date().toISOString()}
+User timezone: ${userTimezone}
+
+Parse the user's reminder request and determine:
+1. What they want to be reminded about (title and description)
+2. When they want to be reminded (date and time)
+3. If it's recurring (daily, weekly, monthly, etc.)
+4. Any specific patterns (days of week, time of day, etc.)
+
+Use the create_reminder function to structure the reminder data. Be intelligent about parsing relative times like "tomorrow", "next week", "every Monday", etc.
+
+Examples:
+- "Remind me to call mom tomorrow at 3pm" → once reminder for tomorrow 3pm
+- "Remind me to take medicine every day at 8am" → daily recurring at 8am
+- "Remind me about the meeting every Monday at 10am" → weekly recurring on Mondays at 10am
+- "Remind me to pay rent on the 1st of every month" → monthly recurring on 1st day`;
+
+            const response = await this.mistral.chat.complete({
+                model: env.MISTRAL_CHAT_MODEL,
+                messages: [
+                    { role: 'system', content: systemPrompt },
+                    { role: 'user', content: userMessage }
+                ],
+                tools: reminderTools,
+                toolChoice: 'auto'
+            });
+
+            return response;
+        } catch (error) {
+            this.logger.error('Error parsing reminder request:', error);
+            throw new Error('Failed to parse reminder request');
+        }
+    }
+
+    async handleReminderToolCall(toolCall: any, userId: string, chatRoomId: string): Promise<any> {
+        const { name, arguments: args } = toolCall.function;
+
+        switch (name) {
+            case 'create_reminder':
+                return {
+                    action: 'create_reminder',
+                    params: args as CreateReminderParams,
+                    userId,
+                    chatRoomId
+                };
+
+            case 'list_reminders':
+                return {
+                    action: 'list_reminders',
+                    params: args as ListRemindersParams,
+                    userId,
+                    chatRoomId
+                };
+
+            case 'update_reminder':
+                return {
+                    action: 'update_reminder',
+                    params: args as UpdateReminderParams,
+                    userId,
+                    chatRoomId
+                };
+
+            case 'delete_reminder':
+                return {
+                    action: 'delete_reminder',
+                    params: args as DeleteReminderParams,
+                    userId,
+                    chatRoomId
+                };
+
+            default:
+                throw new Error(`Unknown tool call: ${name}`);
         }
     }
 
