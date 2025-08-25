@@ -93,29 +93,37 @@ export class AiService {
         }
     }
 
-    async parseReminderRequest(userMessage: string, userTimezone: string = 'UTC'): Promise<any> {
+    async parseReminderRequest(userMessage: string, userTimezone: string = 'Asia/Kolkata'): Promise<any> {
         if (!this.mistral) {
             throw new Error('Mistral AI not initialized');
         }
 
         try {
+            const currentLocalTime = new Date().toLocaleString('en-US', { timeZone: userTimezone });
             const systemPrompt = `You are a helpful assistant that parses natural language reminder requests and converts them into structured data.
 
-Current date and time: ${new Date().toISOString()}
-User timezone: ${userTimezone}
+Current date and time in user's timezone (${userTimezone}): ${currentLocalTime}
+Current UTC time: ${new Date().toISOString()}
+
+IMPORTANT: When creating scheduledAt times, convert the user's local time to UTC for storage.
+For example, if user says "6:15 PM" and they're in Asia/Kolkata (UTC+5:30),
+then 6:15 PM local = 12:45 PM UTC, so scheduledAt should be the UTC time.
 
 Parse the user's reminder request and determine:
 1. What they want to be reminded about (title and description)
-2. When they want to be reminded (date and time)
-3. If it's recurring (daily, weekly, monthly, etc.)
-4. Any specific patterns (days of week, time of day, etc.)
+2. When they want to be reminded (date and time in their local timezone)
+3. Convert the local time to UTC for the scheduledAt field
+4. If it's recurring (daily, weekly, monthly, etc.)
+5. Any specific patterns (days of week, time of day, etc.)
+
+Always include the user's timezone in the recurrencePattern.timezone field.
 
 Use the create_reminder function to structure the reminder data. Be intelligent about parsing relative times like "tomorrow", "next week", "every Monday", etc.
 
 Examples:
-- "Remind me to call mom tomorrow at 3pm" → once reminder for tomorrow 3pm
-- "Remind me to take medicine every day at 8am" → daily recurring at 8am
-- "Remind me about the meeting every Monday at 10am" → weekly recurring on Mondays at 10am
+- "Remind me to call mom tomorrow at 3pm" → once reminder for tomorrow 3pm LOCAL TIME (convert to UTC)
+- "Remind me to take medicine every day at 8am" → daily recurring at 8am LOCAL TIME (convert to UTC)
+- "Remind me about the meeting every Monday at 10am" → weekly recurring on Mondays at 10am LOCAL TIME (convert to UTC)
 - "Remind me to pay rent on the 1st of every month" → monthly recurring on 1st day`;
 
             const response = await this.mistral.chat.complete({

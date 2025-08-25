@@ -7,6 +7,7 @@ import { JournalQueryService } from '../../journal/services/journal-query.servic
 import { AiService } from '../../ai/services/ai.service';
 import { ReminderService } from '../../reminders/services/reminder.service';
 import { ReminderSchedulerService } from '../../reminders/services/reminder-scheduler.service';
+import { TimezoneUtils } from '../../reminders/utils/timezone.utils';
 import * as fs from 'fs-extra';
 import * as path from 'path';
 import axios from 'axios';
@@ -130,6 +131,16 @@ export class TelegramBotService implements OnModuleInit {
 
     this.bot.onText(/\/cancel_reminder (.+)/, async (msg, match) => {
       await this.handleCancelReminderCommand(msg, match);
+    });
+
+    // Debug command to trigger due reminders manually
+    this.bot.onText(/\/test_reminders/, async (msg) => {
+      await this.handleTestRemindersCommand(msg);
+    });
+
+    // Debug command to check reminder details
+    this.bot.onText(/\/debug_reminders/, async (msg) => {
+      await this.handleDebugRemindersCommand(msg);
     });
   }
 
@@ -545,7 +556,10 @@ ${totalEntries === 0 ?
       // Parse reminder request with AI
       const reminderText = match[1];
       console.log(`reminderText`, reminderText);
-      const aiResponse = await this.aiService.parseReminderRequest(reminderText);
+
+      // Get user's timezone (default to Asia/Kolkata for now, can be made configurable later)
+      const userTimezone = 'Asia/Kolkata'; // TODO: Get from user preferences
+      const aiResponse = await this.aiService.parseReminderRequest(reminderText, userTimezone);
       console.log(`aiResponse`, JSON.stringify(aiResponse, null, 2));
 
       // Check if AI returned tool calls - handle different response formats
@@ -582,7 +596,7 @@ ${totalEntries === 0 ?
         console.log('AI response text:', aiText);
 
         // Try simple manual parsing as fallback
-        const fallbackReminder = this.parseReminderFallback(reminderText);
+        const fallbackReminder = this.parseReminderFallback(reminderText, userTimezone);
         if (fallbackReminder) {
           const reminder = await this.reminderService.createReminder(
             user.id,
@@ -664,8 +678,67 @@ ${totalEntries === 0 ?
     }
   }
 
+  private async handleTestRemindersCommand(msg: TelegramBot.Message) {
+    const chatId = msg.chat.id;
+
+    try {
+      await this.bot.sendMessage(chatId, '🔍 Testing reminder system...');
+
+      // Manually trigger the reminder scheduler
+      await this.reminderSchedulerService.triggerDueReminders();
+
+      await this.bot.sendMessage(chatId, '✅ Reminder check completed! Check logs for details.');
+    } catch (error) {
+      this.logger.error('Error testing reminders:', error);
+      await this.bot.sendMessage(chatId, '❌ Error testing reminders.');
+    }
+  }
+
+  private async handleDebugRemindersCommand(msg: TelegramBot.Message) {
+    const chatId = msg.chat.id;
+    const telegramId = msg.from?.id;
+
+    if (!telegramId) {
+      return;
+    }
+
+    try {
+      const user = await this.userService.findByTelegramId(telegramId);
+      if (!user) {
+        await this.bot.sendMessage(chatId, 'Please start the bot first with /start');
+        return;
+      }
+
+      const reminders = await this.reminderService.getUserReminders(user.id);
+
+      let debugMessage = `🔍 **Debug Info for ${reminders.length} reminders:**\n\n`;
+
+      reminders.forEach((reminder, index) => {
+        const now = new Date();
+        const isDue = reminder.nextExecution && reminder.nextExecution <= now;
+
+        debugMessage += `${index + 1}. **${reminder.title}**\n`;
+        debugMessage += `   📅 Scheduled: ${reminder.scheduledAt?.toISOString()}\n`;
+        debugMessage += `   ⏰ Next Exec: ${reminder.nextExecution?.toISOString() || 'null'}\n`;
+        debugMessage += `   🔄 Type: ${reminder.type}\n`;
+        debugMessage += `   📊 Status: ${reminder.status}\n`;
+        debugMessage += `   ⚡ Due Now: ${isDue ? 'YES' : 'NO'}\n`;
+        debugMessage += `   🆔 ID: \`${reminder.id}\`\n\n`;
+      });
+
+      if (reminders.length === 0) {
+        debugMessage += "No reminders found.";
+      }
+
+      await this.bot.sendMessage(chatId, debugMessage, { parse_mode: 'Markdown' });
+    } catch (error) {
+      this.logger.error('Error debugging reminders:', error);
+      await this.bot.sendMessage(chatId, '❌ Error getting debug info.');
+    }
+  }
+
   // Fallback parsing method for simple reminders
-  private parseReminderFallback(text: string): any | null {
+  private parseReminderFallback(text: string, timezone: string = 'Asia/Kolkata'): any | null {
     try {
       console.log('Fallback parsing input:', text);
 
@@ -683,15 +756,15 @@ ${totalEntries === 0 ?
 
         if (match) {
           const title = match[1].trim();
-          let scheduledAt = new Date();
 
-          // Ensure we have a valid date
-          if (isNaN(scheduledAt.getTime())) {
-            scheduledAt = new Date();
-          }
+          // Get current date in user's timezone
+          const now = new Date();
+          const localNow = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
+
+          let targetDate = new Date(localNow);
 
           if (match[2] === 'tomorrow') {
-            scheduledAt.setDate(scheduledAt.getDate() + 1);
+            targetDate.setDate(targetDate.getDate() + 1);
           }
 
           if (match[3] && match[4] && match[5]) { // Has time with AM/PM
@@ -704,29 +777,38 @@ ${totalEntries === 0 ?
             // Validate parsed values
             if (isNaN(hours) || isNaN(minutes)) {
               console.log('Invalid time values, using default');
-              scheduledAt.setHours(9, 0, 0, 0);
+              hours = 9;
             } else {
               if (ampm === 'pm' && hours !== 12) hours += 12;
               if (ampm === 'am' && hours === 12) hours = 0;
-
-              scheduledAt.setHours(hours, minutes, 0, 0);
             }
+
+            targetDate.setHours(hours, minutes || 0, 0, 0);
           } else {
             // Default to 9 AM if no time specified
-            scheduledAt.setHours(9, 0, 0, 0);
+            targetDate.setHours(9, 0, 0, 0);
           }
 
-          // Final validation
-          if (isNaN(scheduledAt.getTime())) {
-            console.error('Invalid date created, using current time + 1 hour');
-            scheduledAt = new Date();
-            scheduledAt.setHours(scheduledAt.getHours() + 1);
+          // Convert local time to UTC for storage
+          // For Asia/Kolkata (UTC+5:30), subtract 5.5 hours to get UTC
+          let utcDate: Date;
+          if (timezone === 'Asia/Kolkata') {
+            utcDate = new Date(targetDate.getTime() - (5.5 * 60 * 60 * 1000));
+          } else {
+            utcDate = targetDate; // Fallback to original time
           }
+
+          console.log('Local target time:', targetDate.toString());
+          console.log('UTC time for storage:', utcDate.toISOString());
+          console.log('Verification - UTC back to local:', utcDate.toLocaleString('en-US', { timeZone: timezone }));
 
           const result = {
             title,
             type: 'once',
-            scheduledAt: scheduledAt.toISOString()
+            scheduledAt: utcDate.toISOString(),
+            recurrencePattern: {
+              timezone: timezone
+            }
           };
 
           console.log('Fallback parsing result:', result);
@@ -752,7 +834,10 @@ ${totalEntries === 0 ?
         message += `\n\n${reminder.description}`;
       }
 
-      message += `\n\n⏰ Scheduled for: ${reminder.scheduledAt.toLocaleString()}`;
+      // Format time in user's timezone
+      const timezone = reminder.recurrencePattern?.timezone || 'Asia/Kolkata';
+      const localTime = TimezoneUtils.formatDateInTimezone(reminder.scheduledAt, timezone);
+      message += `\n\n⏰ Scheduled for: ${localTime}`;
 
       await this.sendMessageWithRetry(chatId, message, { parse_mode: 'Markdown' });
       this.logger.log(`Sent reminder notification: ${reminder.id}`);

@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ReminderRepository } from '../repositories/reminder.repository';
 import { Reminder, ReminderType, ReminderStatus } from '../entities/reminder.entity';
 import { CreateReminderParams, UpdateReminderParams } from '../tools/reminder-tools';
+import { TimezoneUtils } from '../utils/timezone.utils';
 
 @Injectable()
 export class ReminderService {
@@ -73,6 +74,11 @@ export class ReminderService {
 
       const nextExecution = this.calculateNextExecution(scheduledAt, params.type as ReminderType, params.recurrencePattern);
 
+      console.log('Reminder creation debug:');
+      console.log('- scheduledAt:', scheduledAt);
+      console.log('- nextExecution:', nextExecution);
+      console.log('- type:', params.type);
+
       const reminderData: Partial<Reminder> = {
         userId,
         chatRoomId,
@@ -87,6 +93,7 @@ export class ReminderService {
       };
 
       const reminder = await this.reminderRepository.create(reminderData);
+      console.log('Created reminder with nextExecution:', reminder.nextExecution);
       this.logger.log(`Created reminder: ${reminder.id} for user: ${userId}`);
       
       return reminder;
@@ -150,7 +157,8 @@ export class ReminderService {
     pattern?: any
   ): Date | null {
     if (type === ReminderType.ONCE) {
-      return null; // One-time reminders don't have next execution
+      // For one-time reminders, the next execution is the scheduled time itself
+      return new Date(currentTime);
     }
 
     const next = new Date(currentTime);
@@ -222,10 +230,14 @@ export class ReminderService {
     let message = "📅 **Your Active Reminders:**\n\n";
     
     reminders.forEach((reminder, index) => {
-      const nextTime = reminder.nextExecution 
-        ? reminder.nextExecution.toLocaleString()
-        : 'Completed';
-      
+      let nextTime = 'Completed';
+
+      if (reminder.nextExecution) {
+        // Get timezone from reminder or default to Asia/Kolkata
+        const timezone = reminder.recurrencePattern?.timezone || 'Asia/Kolkata';
+        nextTime = TimezoneUtils.formatDateInTimezone(reminder.nextExecution, timezone);
+      }
+
       message += `${index + 1}. **${reminder.title}**\n`;
       message += `   📅 Next: ${nextTime}\n`;
       message += `   🔄 Type: ${reminder.type}\n`;
