@@ -67,6 +67,7 @@ export class Reminder {
     timezone?: string; // User's timezone
     endDate?: string; // When to stop recurring
     maxOccurrences?: number; // Max number of times to repeat
+    exclusionDates?: string[]; // ISO dates to exclude from recurring series
   };
 
   // Execution tracking

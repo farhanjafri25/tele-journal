@@ -58,6 +58,11 @@ export const reminderTools = [
               maxOccurrences: {
                 type: "number",
                 description: "Maximum number of times the reminder should repeat"
+              },
+              exclusionDates: {
+                type: "array",
+                items: { type: "string" },
+                description: "ISO dates to exclude from recurring series"
               }
             }
           },
@@ -204,6 +209,7 @@ export interface CreateReminderParams {
     timezone?: string;
     endDate?: string;
     maxOccurrences?: number;
+    exclusionDates?: string[];
   };
   preferences?: {
     priority?: 'low' | 'medium' | 'high';
