@@ -147,24 +147,35 @@ Examples:
     async parseSmartDeletionRequest(userMessage: string, userTimezone: string = 'Asia/Kolkata'): Promise<any> {
         try {
             const currentLocalTime = new Date().toLocaleString('en-US', { timeZone: userTimezone });
-            const systemPrompt = `You are a helpful assistant that parses natural language requests to find and delete reminders.
+            const systemPrompt = `You are a helpful assistant that parses natural language requests to find and delete reminders with granular control over recurring reminders.
 
 Current date and time in user's timezone (${userTimezone}): ${currentLocalTime}
 
 The user wants to delete a reminder based on their description. Parse their request and extract:
 1. Key words or phrases that describe the reminder content
 2. Time context (today, tomorrow, specific times, etc.)
-3. Your confidence level in the match
+3. Deletion scope for recurring reminders
+4. Your confidence level in the match
 
-Use the match_reminders_for_deletion function to structure the search criteria.
+IMPORTANT: For recurring reminders, determine the user's intent:
+- SINGLE OCCURRENCE: "delete today's medicine reminder", "cancel just this morning's workout"
+- ENTIRE SERIES: "delete all medicine reminders", "remove the medicine reminder series", "cancel all my workout reminders"
+- FROM DATE: "delete medicine reminders from tomorrow onwards", "stop my workout reminders from next week"
+- AMBIGUOUS: When unclear, mark as ambiguous for user clarification
+
+Use the match_reminders_for_deletion function with these parameters:
+- deletionScope: "single" | "series" | "from_date" | "ambiguous"
+- recurringIntent: "single_occurrence" | "entire_series" | "future_from_date" | "unclear"
+- scopeDate: ISO date for single occurrence or start date for from_date scope
 
 Examples:
-- "delete my call mom reminder for today" → keywords: ["call", "mom"], timeContext: "today", confidence: "high"
-- "remove the medicine reminder" → keywords: ["medicine"], confidence: "medium"
-- "delete the 6pm reminder" → keywords: [], timeContext: "6pm", confidence: "medium"
-- "cancel tomorrow's meeting" → keywords: ["meeting"], timeContext: "tomorrow", confidence: "high"
+- "delete my call mom reminder for today" → keywords: ["call", "mom"], timeContext: "today", deletionScope: "single", recurringIntent: "single_occurrence", scopeDate: "2025-08-25"
+- "remove all medicine reminders" → keywords: ["medicine"], deletionScope: "series", recurringIntent: "entire_series"
+- "delete the medicine reminder" → keywords: ["medicine"], deletionScope: "ambiguous", recurringIntent: "unclear" (could be single or series)
+- "cancel workout reminders from tomorrow onwards" → keywords: ["workout"], timeContext: "tomorrow", deletionScope: "from_date", recurringIntent: "future_from_date", scopeDate: "2025-08-26"
+- "delete this week's workout reminders" → keywords: ["workout"], timeContext: "this week", deletionScope: "single", recurringIntent: "single_occurrence"
 
-Be intelligent about extracting meaningful keywords and understanding time references.`;
+Be intelligent about detecting recurring vs one-time deletion intent based on language cues.`;
 
             const userMessageFormatted = `Please help me delete this reminder: "${userMessage}"`;
 

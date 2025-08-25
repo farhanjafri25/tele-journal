@@ -8,6 +8,7 @@ import { AiService } from '../../ai/services/ai.service';
 import { ReminderService } from '../../reminders/services/reminder.service';
 import { ReminderSchedulerService } from '../../reminders/services/reminder-scheduler.service';
 import { ReminderMatcherService } from '../../reminders/services/reminder-matcher.service';
+import { RecurringDeletionService } from '../../reminders/services/recurring-deletion.service';
 import { TimezoneUtils } from '../../reminders/utils/timezone.utils';
 import * as fs from 'fs-extra';
 import * as path from 'path';
@@ -27,6 +28,7 @@ export class TelegramBotService implements OnModuleInit {
     private readonly reminderService: ReminderService,
     private readonly reminderSchedulerService: ReminderSchedulerService,
     private readonly reminderMatcherService: ReminderMatcherService,
+    private readonly recurringDeletionService: RecurringDeletionService,
   ) {}
 
   onModuleInit() {
@@ -795,21 +797,62 @@ ${totalEntries === 0 ?
               `❌ No reminders found matching "${deletionDescription}".\n\nUse /list_reminders to see all your reminders, or try being more specific.`
             );
           } else if (matches.length === 1 && matches[0].score >= 70) {
-            // High confidence single match - delete directly
-            const reminder = matches[0].reminder;
-            await this.reminderService.deleteReminder(reminder.id);
+            // High confidence single match - handle based on recurring status and scope
+            const match = matches[0];
+            const reminder = match.reminder;
 
-            const nextTime = reminder.nextExecution
-              ? TimezoneUtils.formatDateInTimezone(reminder.nextExecution, userTimezone)
-              : 'Completed';
+            if (!match.isRecurring) {
+              // Simple one-time reminder deletion
+              await this.reminderService.deleteReminder(reminder.id);
 
-            await this.bot.sendMessage(
-              chatId,
-              `✅ **Deleted reminder successfully!**\n\n📝 **${reminder.title}**\n📅 Was scheduled for: ${nextTime}\n\n🔍 Match confidence: ${Math.round(matches[0].score)}%\n📋 Reasons: ${matches[0].reasons.join(', ')}`,
-              { parse_mode: 'Markdown' }
-            );
+              const nextTime = reminder.nextExecution
+                ? TimezoneUtils.formatDateInTimezone(reminder.nextExecution, userTimezone)
+                : 'Completed';
+
+              await this.bot.sendMessage(
+                chatId,
+                `✅ **Deleted reminder successfully!**\n\n📝 **${reminder.title}**\n📅 Was scheduled for: ${nextTime}\n\n🔍 Match confidence: ${Math.round(match.score)}%\n📋 Reasons: ${match.reasons.join(', ')}`,
+                { parse_mode: 'Markdown' }
+              );
+            } else {
+              // Recurring reminder - handle based on deletion scope
+              const deletionParams = toolResult.params;
+
+              if (deletionParams.deletionScope === 'ambiguous') {
+                // Show options for recurring reminder
+                const optionsMessage = this.reminderMatcherService.formatRecurringOptions(reminder, userTimezone);
+                await this.bot.sendMessage(chatId, optionsMessage, { parse_mode: 'Markdown' });
+              } else {
+                // Execute deletion with specified scope
+                const scope = {
+                  type: deletionParams.deletionScope as 'single' | 'series' | 'from_date',
+                  targetDate: deletionParams.scopeDate ? new Date(deletionParams.scopeDate) : undefined,
+                  fromDate: deletionParams.scopeDate ? new Date(deletionParams.scopeDate) : undefined
+                };
+
+                const deletionResult = await this.recurringDeletionService.deleteWithScope(
+                  reminder,
+                  scope,
+                  userTimezone
+                );
+
+                if (deletionResult.success) {
+                  await this.bot.sendMessage(
+                    chatId,
+                    `✅ **${deletionResult.message}**\n\n🔍 Match confidence: ${Math.round(match.score)}%\n📋 Reasons: ${match.reasons.join(', ')}`,
+                    { parse_mode: 'Markdown' }
+                  );
+                } else {
+                  await this.bot.sendMessage(
+                    chatId,
+                    `❌ **Failed to delete reminder:** ${deletionResult.message}`,
+                    { parse_mode: 'Markdown' }
+                  );
+                }
+              }
+            }
           } else {
-            // Multiple matches or low confidence - show options
+            // Multiple matches or low confidence - show options with recurring information
             const categorized = this.reminderMatcherService.categorizeMatches(matches);
             let responseMessage = `🔍 **Found ${matches.length} matching reminders for "${deletionDescription}":**\n\n`;
 
@@ -819,9 +862,23 @@ ${totalEntries === 0 ?
                 const nextTime = match.reminder.nextExecution
                   ? TimezoneUtils.formatDateInTimezone(match.reminder.nextExecution, userTimezone)
                   : 'Completed';
+
+                const recurringIcon = match.isRecurring ? '🔄' : '📅';
+                const recurringText = match.isRecurring ? ` (${match.reminder.type} recurring)` : ' (one-time)';
+
                 responseMessage += `${index + 1}. **${match.reminder.title}** (${Math.round(match.score)}% match)\n`;
-                responseMessage += `   📅 Next: ${nextTime}\n`;
+                responseMessage += `   ${recurringIcon} Next: ${nextTime}${recurringText}\n`;
                 responseMessage += `   🔍 Why: ${match.reasons.join(', ')}\n`;
+
+                if (match.isRecurring && match.suggestedScope) {
+                  const scopeText = {
+                    'single': 'single occurrence',
+                    'series': 'entire series',
+                    'from_date': 'from specific date'
+                  }[match.suggestedScope];
+                  responseMessage += `   💡 Suggested: Delete ${scopeText}\n`;
+                }
+
                 responseMessage += `   🆔 ID: \`${match.reminder.id}\`\n\n`;
               });
             }
@@ -832,14 +889,21 @@ ${totalEntries === 0 ?
                 const nextTime = match.reminder.nextExecution
                   ? TimezoneUtils.formatDateInTimezone(match.reminder.nextExecution, userTimezone)
                   : 'Completed';
+
+                const recurringIcon = match.isRecurring ? '🔄' : '📅';
+                const recurringText = match.isRecurring ? ` (${match.reminder.type})` : '';
+
                 responseMessage += `${index + 1}. **${match.reminder.title}** (${Math.round(match.score)}% match)\n`;
-                responseMessage += `   📅 Next: ${nextTime}\n`;
+                responseMessage += `   ${recurringIcon} Next: ${nextTime}${recurringText}\n`;
                 responseMessage += `   🆔 ID: \`${match.reminder.id}\`\n\n`;
               });
             }
 
             responseMessage += '\n💡 **To delete a specific reminder:**\n';
             responseMessage += '• Use `/cancel_reminder [ID]` with the ID above\n';
+            responseMessage += '• For recurring reminders, be specific:\n';
+            responseMessage += '  - `today\'s [reminder]` for single occurrence\n';
+            responseMessage += '  - `all [reminder] reminders` for entire series\n';
             responseMessage += '• Or try being more specific in your description';
 
             await this.bot.sendMessage(chatId, responseMessage, { parse_mode: 'Markdown' });

@@ -7,6 +7,8 @@ export interface ReminderMatch {
   reminder: Reminder;
   score: number;
   reasons: string[];
+  isRecurring: boolean;
+  suggestedScope?: 'single' | 'series' | 'from_date';
 }
 
 @Injectable()
@@ -89,10 +91,34 @@ export class ReminderMatcherService {
       reasons.push(`Similar content detected`);
     }
 
+    const isRecurring = reminder.type !== 'once';
+    let suggestedScope: 'single' | 'series' | 'from_date' | undefined;
+
+    // Suggest scope based on match criteria
+    if (isRecurring) {
+      if (matchParams.timeContext && (
+        matchParams.timeContext.includes('today') ||
+        matchParams.timeContext.includes('tomorrow') ||
+        matchParams.timeContext.includes('this')
+      )) {
+        suggestedScope = 'single';
+      } else if (matchParams.description.toLowerCase().includes('all') ||
+                 matchParams.description.toLowerCase().includes('entire')) {
+        suggestedScope = 'series';
+      } else if (matchParams.timeContext && (
+        matchParams.timeContext.includes('onwards') ||
+        matchParams.timeContext.includes('from')
+      )) {
+        suggestedScope = 'from_date';
+      }
+    }
+
     return {
       reminder,
       score: Math.min(score, 100), // Cap at 100
-      reasons
+      reasons,
+      isRecurring,
+      suggestedScope
     };
   }
 
@@ -115,7 +141,6 @@ export class ReminderMatcherService {
   private calculateTimeScore(reminder: Reminder, timeContext: string, timezone: string): number {
     if (!reminder.nextExecution) return 0;
 
-    const reminderTime = TimezoneUtils.formatDateInTimezone(reminder.nextExecution, timezone);
     const now = new Date();
     const today = new Date(now.toDateString());
     const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000);
@@ -229,7 +254,7 @@ export class ReminderMatcherService {
   }
 
   /**
-   * Format match results for display
+   * Format match results for display with recurring information
    */
   formatMatchResults(matches: ReminderMatch[], timezone: string = 'Asia/Kolkata'): string {
     if (matches.length === 0) {
@@ -239,16 +264,50 @@ export class ReminderMatcherService {
     let message = `🔍 **Found ${matches.length} matching reminder(s):**\n\n`;
 
     matches.forEach((match, index) => {
-      const nextTime = match.reminder.nextExecution 
+      const nextTime = match.reminder.nextExecution
         ? TimezoneUtils.formatDateInTimezone(match.reminder.nextExecution, timezone)
         : 'Completed';
 
+      const recurringIcon = match.isRecurring ? '🔄' : '📅';
+      const recurringText = match.isRecurring ? ` (${match.reminder.type} recurring)` : ' (one-time)';
+
       message += `${index + 1}. **${match.reminder.title}** (${Math.round(match.score)}% match)\n`;
-      message += `   📅 Next: ${nextTime}\n`;
+      message += `   ${recurringIcon} Next: ${nextTime}${recurringText}\n`;
       message += `   🔍 Reasons: ${match.reasons.join(', ')}\n`;
+
+      if (match.isRecurring && match.suggestedScope) {
+        const scopeText = {
+          'single': 'single occurrence',
+          'series': 'entire series',
+          'from_date': 'from specific date'
+        }[match.suggestedScope];
+        message += `   💡 Suggested: Delete ${scopeText}\n`;
+      }
+
       message += `   🆔 ID: \`${match.reminder.id}\`\n\n`;
     });
 
     return message;
+  }
+
+  /**
+   * Format recurring reminder deletion options
+   */
+  formatRecurringOptions(reminder: Reminder, timezone: string = 'Asia/Kolkata'): string {
+    const nextTime = reminder.nextExecution
+      ? TimezoneUtils.formatDateInTimezone(reminder.nextExecution, timezone)
+      : 'Completed';
+
+    return `🔄 **"${reminder.title}" is a recurring reminder**\n\n` +
+           `📅 Next occurrence: ${nextTime}\n` +
+           `🔄 Type: ${reminder.type}\n\n` +
+           `**Choose deletion scope:**\n` +
+           `1️⃣ Delete only next occurrence\n` +
+           `2️⃣ Delete entire recurring series\n` +
+           `3️⃣ Stop from specific date onwards\n\n` +
+           `💡 Use:\n` +
+           `• \`/delete_reminder today's ${reminder.title.toLowerCase()}\` for single occurrence\n` +
+           `• \`/delete_reminder all ${reminder.title.toLowerCase()} reminders\` for entire series\n` +
+           `• \`/cancel_reminder ${reminder.id}\` for precise control`;
   }
 }

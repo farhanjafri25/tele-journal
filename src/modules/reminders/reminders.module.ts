@@ -5,6 +5,7 @@ import { ReminderRepository } from './repositories/reminder.repository';
 import { ReminderService } from './services/reminder.service';
 import { ReminderSchedulerService } from './services/reminder-scheduler.service';
 import { ReminderMatcherService } from './services/reminder-matcher.service';
+import { RecurringDeletionService } from './services/recurring-deletion.service';
 
 @Module({
   imports: [
@@ -15,11 +16,13 @@ import { ReminderMatcherService } from './services/reminder-matcher.service';
     ReminderService,
     ReminderSchedulerService,
     ReminderMatcherService,
+    RecurringDeletionService,
   ],
   exports: [
     ReminderService,
     ReminderSchedulerService,
     ReminderMatcherService,
+    RecurringDeletionService,
   ],
 })
 export class RemindersModule {}

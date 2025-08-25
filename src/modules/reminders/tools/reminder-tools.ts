@@ -148,7 +148,7 @@ export const reminderTools = [
     type: "function" as const,
     function: {
       name: "match_reminders_for_deletion",
-      description: "Match existing reminders based on natural language description for deletion",
+      description: "Match existing reminders based on natural language description for deletion with granular control over recurring reminders",
       parameters: {
         type: "object",
         properties: {
@@ -165,13 +165,27 @@ export const reminderTools = [
             items: { type: "string" },
             description: "Key words or phrases that should match the reminder content"
           },
+          deletionScope: {
+            type: "string",
+            enum: ["single", "series", "from_date", "ambiguous"],
+            description: "Scope of deletion: 'single' for one occurrence, 'series' for entire recurring series, 'from_date' for future occurrences from a date, 'ambiguous' when unclear"
+          },
+          scopeDate: {
+            type: "string",
+            description: "Specific date for single occurrence deletion or start date for from_date scope (ISO format)"
+          },
           confidence: {
             type: "string",
             enum: ["high", "medium", "low"],
             description: "Confidence level of the match based on the description specificity"
+          },
+          recurringIntent: {
+            type: "string",
+            enum: ["single_occurrence", "entire_series", "future_from_date", "unclear"],
+            description: "User's intent regarding recurring reminders based on language cues"
           }
         },
-        required: ["description", "keywords"]
+        required: ["description", "keywords", "deletionScope"]
       }
     }
   }
@@ -216,5 +230,8 @@ export interface MatchRemindersForDeletionParams {
   description: string;
   timeContext?: string;
   keywords: string[];
+  deletionScope: 'single' | 'series' | 'from_date' | 'ambiguous';
+  scopeDate?: string;
   confidence?: 'high' | 'medium' | 'low';
+  recurringIntent?: 'single_occurrence' | 'entire_series' | 'future_from_date' | 'unclear';
 }
