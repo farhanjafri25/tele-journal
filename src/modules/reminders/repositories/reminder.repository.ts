@@ -22,7 +22,7 @@ export class ReminderRepository {
     });
   }
 
-  async findByUserId(userId: string): Promise<Reminder[]> {
+  async findByUserId(userId: number): Promise<Reminder[]> {
     return this.reminderRepo.find({
       where: { userId, status: ReminderStatus.ACTIVE },
       order: { nextExecution: 'ASC' },
@@ -47,7 +47,7 @@ export class ReminderRepository {
     });
   }
 
-  async findUpcomingReminders(userId: string, hours: number = 24): Promise<Reminder[]> {
+  async findUpcomingReminders(userId: number, hours: number = 24): Promise<Reminder[]> {
     const now = new Date();
     const futureTime = new Date(now.getTime() + hours * 60 * 60 * 1000);
 
@@ -69,13 +69,17 @@ export class ReminderRepository {
 
   async delete(id: string): Promise<boolean> {
     const result = await this.reminderRepo.delete(id);
-    return result.affected > 0;
+    return (result.affected ?? 0) > 0;
   }
 
   async markAsExecuted(id: string, nextExecution?: Date): Promise<void> {
+    // First get current execution count
+    const reminder = await this.findById(id);
+    const currentCount = reminder?.executionCount ?? 0;
+
     const updateData: Partial<Reminder> = {
       lastExecutedAt: new Date(),
-      executionCount: () => 'execution_count + 1',
+      executionCount: currentCount + 1,
     };
 
     if (nextExecution) {
@@ -85,7 +89,7 @@ export class ReminderRepository {
       updateData.status = ReminderStatus.COMPLETED;
     }
 
-    await this.reminderRepo.update(id, updateData as any);
+    await this.reminderRepo.update(id, updateData);
   }
 
   async pauseReminder(id: string): Promise<void> {

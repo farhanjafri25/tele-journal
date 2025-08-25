@@ -1,4 +1,4 @@
-import { MigrationInterface, QueryRunner, Table, Index, ForeignKey } from 'typeorm';
+import { MigrationInterface, QueryRunner, Table, TableIndex, TableForeignKey } from 'typeorm';
 
 export class CreateRemindersTable1703000000000 implements MigrationInterface {
   name = 'CreateRemindersTable1703000000000';
@@ -17,7 +17,7 @@ export class CreateRemindersTable1703000000000 implements MigrationInterface {
           },
           {
             name: 'userId',
-            type: 'uuid',
+            type: 'bigint',
             isNullable: false,
           },
           {
@@ -93,35 +93,35 @@ export class CreateRemindersTable1703000000000 implements MigrationInterface {
     );
 
     // Create indexes for better performance
-    await queryRunner.createIndex(
-      'reminders',
-      new Index('IDX_REMINDERS_USER_ID', ['userId']),
-    );
+    await queryRunner.createIndex('reminders', new TableIndex({
+      name: 'IDX_REMINDERS_USER_ID',
+      columnNames: ['userId']
+    }));
 
-    await queryRunner.createIndex(
-      'reminders',
-      new Index('IDX_REMINDERS_CHAT_ROOM_ID', ['chatRoomId']),
-    );
+    await queryRunner.createIndex('reminders', new TableIndex({
+      name: 'IDX_REMINDERS_CHAT_ROOM_ID',
+      columnNames: ['chatRoomId']
+    }));
 
-    await queryRunner.createIndex(
-      'reminders',
-      new Index('IDX_REMINDERS_NEXT_EXECUTION', ['nextExecution']),
-    );
+    await queryRunner.createIndex('reminders', new TableIndex({
+      name: 'IDX_REMINDERS_NEXT_EXECUTION',
+      columnNames: ['nextExecution']
+    }));
 
-    await queryRunner.createIndex(
-      'reminders',
-      new Index('IDX_REMINDERS_STATUS', ['status']),
-    );
+    await queryRunner.createIndex('reminders', new TableIndex({
+      name: 'IDX_REMINDERS_STATUS',
+      columnNames: ['status']
+    }));
 
-    await queryRunner.createIndex(
-      'reminders',
-      new Index('IDX_REMINDERS_TYPE', ['type']),
-    );
+    await queryRunner.createIndex('reminders', new TableIndex({
+      name: 'IDX_REMINDERS_TYPE',
+      columnNames: ['type']
+    }));
 
     // Create foreign key constraint
     await queryRunner.createForeignKey(
       'reminders',
-      new ForeignKey({
+      new TableForeignKey({
         columnNames: ['userId'],
         referencedColumnNames: ['id'],
         referencedTableName: 'users',

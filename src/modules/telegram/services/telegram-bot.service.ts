@@ -5,6 +5,8 @@ import { UserService } from '../../users/services/user.service';
 import { JournalService } from '../../journal/services/journal.service';
 import { JournalQueryService } from '../../journal/services/journal-query.service';
 import { AiService } from '../../ai/services/ai.service';
+import { ReminderService } from '../../reminders/services/reminder.service';
+import { ReminderSchedulerService } from '../../reminders/services/reminder-scheduler.service';
 import * as fs from 'fs-extra';
 import * as path from 'path';
 import axios from 'axios';
@@ -20,27 +22,73 @@ export class TelegramBotService implements OnModuleInit {
     private readonly journalService: JournalService,
     private readonly journalQueryService: JournalQueryService,
     private readonly aiService: AiService,
+    private readonly reminderService: ReminderService,
+    private readonly reminderSchedulerService: ReminderSchedulerService,
   ) {}
 
   onModuleInit() {
     this.initializeBot();
+    // Connect scheduler with telegram bot service
+    this.reminderSchedulerService.setTelegramBotService(this);
   }
 
   private initializeBot() {
-    this.bot = new TelegramBot(env.TELEGRAM_BOT_TOKEN, { polling: true });
-    
-    this.logger.log('Telegram bot initialized');
-    
+    this.bot = new TelegramBot(env.TELEGRAM_BOT_TOKEN, {
+      polling: {
+        interval: 1000, // Check for updates every second
+        autoStart: true,
+        params: {
+          timeout: 10, // Long polling timeout
+        }
+      },
+    });
+
+    this.logger.log('Telegram bot initialized with enhanced configuration');
+
     // Set up command handlers
     this.setupCommands();
-    
+
     // Set up message handlers
     this.setupMessageHandlers();
-    
-    // Error handling
-    this.bot.on('polling_error', (error) => {
+
+    // Enhanced error handling with retry logic
+    this.bot.on('polling_error', (error: any) => {
       this.logger.error('Polling error:', error);
+
+      // Handle specific error types
+      if (error.code === 'EFATAL' || error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT') {
+        this.logger.warn('Network error detected, bot will automatically retry...');
+        // The bot will automatically retry polling
+      } else if (error.code === 'ETELEGRAM') {
+        this.logger.warn('Telegram API error:', error.response?.body || error.message);
+      } else {
+        this.logger.error('Unexpected polling error:', error);
+      }
     });
+
+    // Handle webhook errors
+    this.bot.on('webhook_error', (error: any) => {
+      this.logger.error('Webhook error:', error);
+    });
+  }
+
+  // Helper method to send messages with retry logic
+  private async sendMessageWithRetry(chatId: number | string, text: string, options?: any, retries = 3): Promise<any> {
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        return await this.bot.sendMessage(chatId, text, options);
+      } catch (error: any) {
+        this.logger.warn(`Send message attempt ${attempt} failed:`, error.message);
+
+        if (attempt === retries) {
+          this.logger.error(`Failed to send message after ${retries} attempts:`, error);
+          throw error;
+        }
+
+        // Wait before retry (exponential backoff)
+        await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+      }
+    }
   }
 
   private setupCommands() {
@@ -69,6 +117,19 @@ export class TelegramBotService implements OnModuleInit {
     // Stats command
     this.bot.onText(/\/stats/, async (msg) => {
       await this.handleStatsCommand(msg);
+    });
+
+    // Reminder commands
+    this.bot.onText(/\/remind (.+)/, async (msg, match) => {
+      await this.handleReminderCommand(msg, match);
+    });
+
+    this.bot.onText(/\/reminders/, async (msg) => {
+      await this.handleListRemindersCommand(msg);
+    });
+
+    this.bot.onText(/\/cancel_reminder (.+)/, async (msg, match) => {
+      await this.handleCancelReminderCommand(msg, match);
     });
   }
 
@@ -153,6 +214,11 @@ Start by sharing what's on your mind today - type or speak! ✨
 📊 **Insights**:
 • /summary - Get a summary of your recent entries
 • /stats - View your journaling statistics
+
+⏰ **Reminders**:
+• /remind [text] - Create a smart reminder (e.g., "remind me to call mom tomorrow at 3pm")
+• /reminders - List all your active reminders
+• /cancel_reminder [ID] - Cancel a specific reminder
 
 ❓ **Other**:
 • /help - Show this help message
@@ -456,6 +522,242 @@ ${totalEntries === 0 ?
     } catch (error) {
       this.logger.error('Error downloading audio file:', error);
       throw new Error('Failed to download audio file');
+    }
+  }
+
+  // Reminder command handlers
+  private async handleReminderCommand(msg: TelegramBot.Message, match: RegExpExecArray | null) {
+    const chatId = msg.chat.id;
+    const telegramId = msg.from?.id;
+
+    if (!telegramId || !match || !match[1]) {
+      await this.bot.sendMessage(chatId, 'Please provide a reminder description. Example: /remind take medicine tomorrow at 8am');
+      return;
+    }
+
+    try {
+      // Find or create user
+      const user = await this.userService.findOrCreateUser(telegramId, msg.from?.username);
+
+      // Show typing indicator
+      await this.bot.sendChatAction(chatId, 'typing');
+
+      // Parse reminder request with AI
+      const reminderText = match[1];
+      console.log(`reminderText`, reminderText);
+      const aiResponse = await this.aiService.parseReminderRequest(reminderText);
+      console.log(`aiResponse`, JSON.stringify(aiResponse, null, 2));
+
+      // Check if AI returned tool calls - handle different response formats
+      const message = aiResponse.choices?.[0]?.message;
+      const toolCalls = message?.tool_calls || message?.toolCalls;
+
+      console.log(`message`, message);
+      console.log(`toolCalls`, toolCalls);
+
+      if (toolCalls && toolCalls.length > 0) {
+        const toolCall = toolCalls[0];
+        console.log(`toolCall`, toolCall);
+        const toolResult = await this.aiService.handleReminderToolCall(toolCall, user.id, chatId.toString());
+        console.log(`toolResult`, toolResult);
+        if (toolResult.action === 'create_reminder') {
+          // Create the reminder
+          const reminder = await this.reminderService.createReminder(
+            user.id,
+            chatId.toString(),
+            toolResult.params
+          );
+
+          const scheduledTime = new Date(toolResult.params.scheduledAt).toLocaleString();
+          await this.bot.sendMessage(
+            chatId,
+            `✅ Reminder created!\n\n📝 **${reminder.title}**\n📅 Scheduled for: ${scheduledTime}\n🔄 Type: ${reminder.type}\n\n🆔 ID: \`${reminder.id}\``
+          );
+        }
+      } else {
+        // Fallback: Try to parse manually or use AI response text
+        console.log('No tool calls found, trying fallback parsing...');
+
+        const aiText = aiResponse.choices?.[0]?.message?.content;
+        console.log('AI response text:', aiText);
+
+        // Try simple manual parsing as fallback
+        const fallbackReminder = this.parseReminderFallback(reminderText);
+        if (fallbackReminder) {
+          const reminder = await this.reminderService.createReminder(
+            user.id,
+            chatId.toString(),
+            fallbackReminder
+          );
+
+          const scheduledTime = new Date(fallbackReminder.scheduledAt).toLocaleString();
+          await this.bot.sendMessage(
+            chatId,
+            `✅ Reminder created (fallback parsing)!\n\n📝 **${reminder.title}**\n📅 Scheduled for: ${scheduledTime}\n🔄 Type: ${reminder.type}\n\n🆔 ID: \`${reminder.id}\``
+          );
+        } else {
+          // AI couldn't parse the reminder
+          await this.bot.sendMessage(
+            chatId,
+            '❌ I couldn\'t understand your reminder request. Please try again with more details.\n\nExample: "Remind me to call mom tomorrow at 3pm"'
+          );
+        }
+      }
+    } catch (error) {
+      this.logger.error('Error creating reminder:', error);
+      await this.bot.sendMessage(chatId, '❌ Sorry, I couldn\'t create your reminder. Please try again.');
+    }
+  }
+
+  private async handleListRemindersCommand(msg: TelegramBot.Message) {
+    const chatId = msg.chat.id;
+    const telegramId = msg.from?.id;
+
+    if (!telegramId) {
+      return;
+    }
+
+    try {
+      const user = await this.userService.findByTelegramId(telegramId);
+      if (!user) {
+        await this.bot.sendMessage(chatId, 'Please start the bot first with /start');
+        return;
+      }
+
+      const reminders = await this.reminderService.getUserReminders(user.id);
+      const message = await this.reminderService.formatRemindersList(reminders);
+
+      await this.bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
+    } catch (error) {
+      this.logger.error('Error listing reminders:', error);
+      await this.bot.sendMessage(chatId, '❌ Sorry, I couldn\'t retrieve your reminders. Please try again.');
+    }
+  }
+
+  private async handleCancelReminderCommand(msg: TelegramBot.Message, match: RegExpExecArray | null) {
+    const chatId = msg.chat.id;
+    const telegramId = msg.from?.id;
+
+    if (!telegramId || !match || !match[1]) {
+      await this.bot.sendMessage(chatId, 'Please provide a reminder ID. Example: /cancel_reminder abc123');
+      return;
+    }
+
+    try {
+      const user = await this.userService.findByTelegramId(telegramId);
+      if (!user) {
+        await this.bot.sendMessage(chatId, 'Please start the bot first with /start');
+        return;
+      }
+
+      const reminderId = match[1];
+      const success = await this.reminderService.deleteReminder(reminderId);
+
+      if (success) {
+        await this.bot.sendMessage(chatId, '✅ Reminder cancelled successfully!');
+      } else {
+        await this.bot.sendMessage(chatId, '❌ Reminder not found or already cancelled.');
+      }
+    } catch (error) {
+      this.logger.error('Error cancelling reminder:', error);
+      await this.bot.sendMessage(chatId, '❌ Sorry, I couldn\'t cancel your reminder. Please try again.');
+    }
+  }
+
+  // Fallback parsing method for simple reminders
+  private parseReminderFallback(text: string): any | null {
+    try {
+      console.log('Fallback parsing input:', text);
+
+      // Simple regex patterns for common reminder formats
+      const patterns = [
+        /remind me to (.+) (today|tomorrow) at (\d{1,2}):(\d{2})\s*(am|pm)/i,
+        /remind me to (.+) at (\d{1,2}):(\d{2})\s*(am|pm)/i,
+        /remind me to (.+) (today|tomorrow)/i,
+        /remind me to (.+)/i
+      ];
+
+      for (const pattern of patterns) {
+        const match = text.match(pattern);
+        console.log('Pattern match:', pattern, match);
+
+        if (match) {
+          const title = match[1].trim();
+          let scheduledAt = new Date();
+
+          // Ensure we have a valid date
+          if (isNaN(scheduledAt.getTime())) {
+            scheduledAt = new Date();
+          }
+
+          if (match[2] === 'tomorrow') {
+            scheduledAt.setDate(scheduledAt.getDate() + 1);
+          }
+
+          if (match[3] && match[4] && match[5]) { // Has time with AM/PM
+            let hours = parseInt(match[3]);
+            const minutes = parseInt(match[4]);
+            const ampm = match[5].toLowerCase();
+
+            console.log('Parsing time:', hours, minutes, ampm);
+
+            // Validate parsed values
+            if (isNaN(hours) || isNaN(minutes)) {
+              console.log('Invalid time values, using default');
+              scheduledAt.setHours(9, 0, 0, 0);
+            } else {
+              if (ampm === 'pm' && hours !== 12) hours += 12;
+              if (ampm === 'am' && hours === 12) hours = 0;
+
+              scheduledAt.setHours(hours, minutes, 0, 0);
+            }
+          } else {
+            // Default to 9 AM if no time specified
+            scheduledAt.setHours(9, 0, 0, 0);
+          }
+
+          // Final validation
+          if (isNaN(scheduledAt.getTime())) {
+            console.error('Invalid date created, using current time + 1 hour');
+            scheduledAt = new Date();
+            scheduledAt.setHours(scheduledAt.getHours() + 1);
+          }
+
+          const result = {
+            title,
+            type: 'once',
+            scheduledAt: scheduledAt.toISOString()
+          };
+
+          console.log('Fallback parsing result:', result);
+          return result;
+        }
+      }
+
+      console.log('No pattern matched');
+      return null;
+    } catch (error) {
+      console.error('Fallback parsing error:', error);
+      return null;
+    }
+  }
+
+  // Method to send reminder notifications (called by scheduler)
+  async sendReminderNotification(reminder: any) {
+    try {
+      const chatId = reminder.chatRoomId;
+      let message = `🔔 **Reminder**\n\n📝 ${reminder.title}`;
+
+      if (reminder.description) {
+        message += `\n\n${reminder.description}`;
+      }
+
+      message += `\n\n⏰ Scheduled for: ${reminder.scheduledAt.toLocaleString()}`;
+
+      await this.sendMessageWithRetry(chatId, message, { parse_mode: 'Markdown' });
+      this.logger.log(`Sent reminder notification: ${reminder.id}`);
+    } catch (error) {
+      this.logger.error(`Error sending reminder notification for ${reminder.id}:`, error);
     }
   }
 }

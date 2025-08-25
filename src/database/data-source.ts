@@ -2,6 +2,7 @@
 import { DataSource } from 'typeorm';
 import { UserEntity } from '../modules/users/entities/user.entity';
 import { JournalEntity } from '../modules/journal/entites/journal.entity';
+import { Reminder } from '../modules/reminders/entities/reminder.entity';
 
 
 import * as path from "path";
@@ -19,7 +20,7 @@ console.log(`process.env.NODE_ENV`, process.env);
 export default new DataSource({
   type: 'postgres',
   url: `${process.env.DATABASE_URL}`,
-  entities: [UserEntity, JournalEntity],
-  migrations: ['src/migrations/*.ts'],
+  entities: [UserEntity, JournalEntity, Reminder],
+  migrations: ['src/database/migrations/*.ts'],
   synchronize: false, // important: use migrations, not sync
 });

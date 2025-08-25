@@ -12,12 +12,25 @@ export class ReminderService {
   ) {}
 
   async createReminder(
-    userId: string,
+    userId: number,
     chatRoomId: string,
     params: CreateReminderParams
   ): Promise<Reminder> {
     try {
       const scheduledAt = new Date(params.scheduledAt);
+
+      // Validate the date
+      if (isNaN(scheduledAt.getTime())) {
+        this.logger.error('Invalid scheduledAt date:', params.scheduledAt);
+        throw new Error('Invalid date provided for reminder');
+      }
+
+      // Ensure the date is in the future
+      if (scheduledAt < new Date()) {
+        this.logger.warn('Scheduled date is in the past, adjusting to future');
+        scheduledAt.setTime(Date.now() + 60000); // Add 1 minute
+      }
+
       const nextExecution = this.calculateNextExecution(scheduledAt, params.type as ReminderType, params.recurrencePattern);
 
       const reminderData: Partial<Reminder> = {
@@ -43,7 +56,7 @@ export class ReminderService {
     }
   }
 
-  async getUserReminders(userId: string): Promise<Reminder[]> {
+  async getUserReminders(userId: number): Promise<Reminder[]> {
     return this.reminderRepository.findByUserId(userId);
   }
 
@@ -111,9 +124,9 @@ export class ReminderService {
         if (pattern?.daysOfWeek && pattern.daysOfWeek.length > 0) {
           // Find next occurrence of specified days
           const currentDay = next.getDay();
-          const sortedDays = pattern.daysOfWeek.sort((a, b) => a - b);
-          
-          let nextDay = sortedDays.find(day => day > currentDay);
+          const sortedDays = pattern.daysOfWeek.sort((a: number, b: number) => a - b);
+
+          let nextDay = sortedDays.find((day: number) => day > currentDay);
           if (!nextDay) {
             nextDay = sortedDays[0];
             next.setDate(next.getDate() + 7); // Next week

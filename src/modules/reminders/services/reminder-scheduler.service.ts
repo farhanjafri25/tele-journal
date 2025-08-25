@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, Inject, forwardRef } from '@nestjs/common';
 import { ReminderService } from './reminder.service';
 import { Reminder } from '../entities/reminder.entity';
 
@@ -10,6 +10,13 @@ export class ReminderSchedulerService implements OnModuleInit {
   constructor(
     private readonly reminderService: ReminderService,
   ) {}
+
+  // Method to set telegram bot service (will be called from telegram module)
+  private telegramBotService: any;
+
+  setTelegramBotService(telegramBotService: any) {
+    this.telegramBotService = telegramBotService;
+  }
 
   onModuleInit() {
     this.startScheduler();
@@ -50,13 +57,16 @@ export class ReminderSchedulerService implements OnModuleInit {
     try {
       this.logger.log(`Executing reminder: ${reminder.id} - ${reminder.title}`);
 
-      // This will be handled by the Telegram bot service
-      // For now, we just mark it as executed and calculate next execution
+      // Send notification via Telegram bot if available
+      if (this.telegramBotService) {
+        await this.telegramBotService.sendReminderNotification(reminder);
+      } else {
+        this.logger.warn('Telegram bot service not available for reminder notification');
+      }
+
+      // Mark as executed and calculate next execution
       await this.reminderService.markReminderAsExecuted(reminder);
 
-      // Emit event or call telegram service to send reminder
-      // This will be implemented when we integrate with telegram
-      
     } catch (error) {
       this.logger.error(`Error executing reminder ${reminder.id}:`, error);
     }

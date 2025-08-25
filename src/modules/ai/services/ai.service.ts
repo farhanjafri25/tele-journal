@@ -128,6 +128,7 @@ Examples:
                 toolChoice: 'auto'
             });
 
+            console.log('Mistral API response:', JSON.stringify(response, null, 2));
             return response;
         } catch (error) {
             this.logger.error('Error parsing reminder request:', error);
@@ -135,9 +136,10 @@ Examples:
         }
     }
 
-    async handleReminderToolCall(toolCall: any, userId: string, chatRoomId: string): Promise<any> {
+    async handleReminderToolCall(toolCall: any, userId: number, chatRoomId: string): Promise<any> {
         const { name, arguments: args } = toolCall.function;
-
+        console.log(`toolCall.function`, toolCall.function);
+        
         switch (name) {
             case 'create_reminder':
                 return {

@@ -22,8 +22,8 @@ export class Reminder {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column()
-  userId: string;
+  @Column({ type: 'bigint' })
+  userId: number;
 
   @Column({ type: 'bigint' })
   chatRoomId: string; // Telegram chat ID
