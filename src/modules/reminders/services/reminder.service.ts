@@ -17,12 +17,52 @@ export class ReminderService {
     params: CreateReminderParams
   ): Promise<Reminder> {
     try {
-      const scheduledAt = new Date(params.scheduledAt);
+      console.log(`params`, params);
+      console.log('Raw scheduledAt:', params.scheduledAt, typeof params.scheduledAt);
+
+      // Handle different date formats
+      let scheduledAt: Date;
+      const dateInput = params.scheduledAt as any;
+
+      if (dateInput instanceof Date) {
+        scheduledAt = dateInput;
+      } else if (typeof dateInput === 'string') {
+        // Try different parsing methods
+        scheduledAt = new Date(dateInput);
+
+        // If that fails, try parsing as ISO string
+        if (isNaN(scheduledAt.getTime())) {
+          scheduledAt = new Date(dateInput.replace(/['"]/g, ''));
+        }
+
+        // If still fails, try manual parsing
+        if (isNaN(scheduledAt.getTime())) {
+          const isoMatch = dateInput.match(/(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
+          if (isoMatch) {
+            scheduledAt = new Date(
+              parseInt(isoMatch[1]), // year
+              parseInt(isoMatch[2]) - 1, // month (0-based)
+              parseInt(isoMatch[3]), // day
+              parseInt(isoMatch[4]), // hour
+              parseInt(isoMatch[5]), // minute
+              parseInt(isoMatch[6])  // second
+            );
+          }
+        }
+      } else {
+        scheduledAt = new Date();
+        this.logger.warn('Unexpected scheduledAt type, using current time');
+      }
+
+      console.log('Parsed scheduledAt:', scheduledAt, 'Valid:', !isNaN(scheduledAt.getTime()));
 
       // Validate the date
       if (isNaN(scheduledAt.getTime())) {
-        this.logger.error('Invalid scheduledAt date:', params.scheduledAt);
-        throw new Error('Invalid date provided for reminder');
+        this.logger.error('Invalid scheduledAt date after all parsing attempts:', dateInput);
+        // Use current time + 1 hour as fallback
+        scheduledAt = new Date();
+        scheduledAt.setHours(scheduledAt.getHours() + 1);
+        this.logger.warn('Using fallback time:', scheduledAt);
       }
 
       // Ensure the date is in the future

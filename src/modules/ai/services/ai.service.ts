@@ -139,12 +139,27 @@ Examples:
     async handleReminderToolCall(toolCall: any, userId: number, chatRoomId: string): Promise<any> {
         const { name, arguments: args } = toolCall.function;
         console.log(`toolCall.function`, toolCall.function);
-        
+        console.log(`raw args:`, args, typeof args);
+
+        // Parse arguments if they're a string
+        let parsedArgs: any;
+        if (typeof args === 'string') {
+            try {
+                parsedArgs = JSON.parse(args);
+                console.log(`parsed args:`, parsedArgs);
+            } catch (error) {
+                console.error('Error parsing tool call arguments:', error);
+                throw new Error('Invalid tool call arguments format');
+            }
+        } else {
+            parsedArgs = args;
+        }
+
         switch (name) {
             case 'create_reminder':
                 return {
                     action: 'create_reminder',
-                    params: args as CreateReminderParams,
+                    params: parsedArgs as CreateReminderParams,
                     userId,
                     chatRoomId
                 };
@@ -152,7 +167,7 @@ Examples:
             case 'list_reminders':
                 return {
                     action: 'list_reminders',
-                    params: args as ListRemindersParams,
+                    params: parsedArgs as ListRemindersParams,
                     userId,
                     chatRoomId
                 };
@@ -160,7 +175,7 @@ Examples:
             case 'update_reminder':
                 return {
                     action: 'update_reminder',
-                    params: args as UpdateReminderParams,
+                    params: parsedArgs as UpdateReminderParams,
                     userId,
                     chatRoomId
                 };
@@ -168,7 +183,7 @@ Examples:
             case 'delete_reminder':
                 return {
                     action: 'delete_reminder',
-                    params: args as DeleteReminderParams,
+                    params: parsedArgs as DeleteReminderParams,
                     userId,
                     chatRoomId
                 };
