@@ -48,7 +48,9 @@ export class TelegramBotService implements OnModuleInit {
       },
     });
 
-    this.logger.log('Telegram bot initialized with enhanced configuration');
+    if (process.env.NODE_ENV !== 'production') {
+      this.logger.log('Telegram bot initialized');
+    }
 
     // Set up command handlers
     this.setupCommands();
@@ -420,11 +422,15 @@ ${totalEntries === 0 ?
       const audioFilePath = await this.downloadAudioFile(fileId, 'voice');
 
       // Convert speech to text
-      const transcribedText = await this.aiService.speechToText(audioFilePath);
-      console.log(`Transcribed text: ${transcribedText}`);
-      
-      // Clean up the audio file
-      await fs.remove(audioFilePath);
+      let transcribedText = '';
+      try {
+        transcribedText = await this.aiService.speechToText(audioFilePath);
+        if (process.env.NODE_ENV !== 'production') {
+          console.log(`Transcribed text length: ${transcribedText.length}`);
+        }
+      } finally {
+        await fs.remove(audioFilePath).catch(() => {});
+      }
 
       if (!transcribedText.trim()) {
         await this.bot.editMessageText('❌ Could not transcribe the voice message. Please try again.', {
@@ -470,7 +476,7 @@ ${totalEntries === 0 ?
 
         // Fallback: could not parse as reminder
         await this.bot.editMessageText(
-          `❔ I heard: "${transcribedText}"\nI couldn't confidently create a reminder from this. Try phrasing like "Remind me to..." or use /remind`,
+          `❔ I heard your voice but couldn't confidently create a reminder. Try phrasing like "Remind me to..." or use /remind`,
           { chat_id: chatId, message_id: processingMsg.message_id }
         );
         return;
@@ -479,7 +485,7 @@ ${totalEntries === 0 ?
       // Not a reminder intent: save as journal entry
       await this.journalService.createEntry(user.id, transcribedText);
       await this.bot.editMessageText(
-        `✅ Voice message saved!\n\n📝 Transcribed: "${transcribedText}"`,
+        `✅ Voice message saved!`,
         { chat_id: chatId, message_id: processingMsg.message_id }
       );
     } catch (error) {
@@ -511,7 +517,7 @@ ${totalEntries === 0 ?
       const transcribedText = await this.aiService.speechToText(audioFilePath);
 
       // Clean up the audio file
-      await fs.remove(audioFilePath);
+      await fs.remove(audioFilePath).catch(() => {});
 
       if (!transcribedText.trim()) {
         await this.bot.editMessageText('❌ Could not transcribe the audio message. Please try again.', {
@@ -568,7 +574,9 @@ ${totalEntries === 0 ?
 
       return new Promise((resolve, reject) => {
         writer.on('finish', () => {
-          this.logger.log(`Audio file downloaded: ${filePath}`);
+          if (process.env.NODE_ENV !== 'production') {
+            this.logger.log(`Audio file downloaded: ${filePath}`);
+          }
           resolve(filePath);
         });
         writer.on('error', reject);
@@ -598,25 +606,28 @@ ${totalEntries === 0 ?
 
       // Parse reminder request with AI
       const reminderText = match[1];
-      console.log(`reminderText`, reminderText);
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`reminderText`, reminderText);
+      }
 
       // Get user's timezone (default to Asia/Kolkata for now, can be made configurable later)
       const userTimezone = 'Asia/Kolkata'; // TODO: Get from user preferences
       const aiResponse = await this.aiService.parseReminderRequest(reminderText, userTimezone);
-      console.log(`aiResponse`, JSON.stringify(aiResponse, null, 2));
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`aiResponse received`);
+      }
 
       // Check if AI returned tool calls - handle different response formats
       const message = aiResponse.choices?.[0]?.message;
       const toolCalls = message?.tool_calls || message?.toolCalls;
 
-      console.log(`message`, message);
-      console.log(`toolCalls`, toolCalls);
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`toolCalls count`, toolCalls?.length || 0);
+      }
 
       if (toolCalls && toolCalls.length > 0) {
         const toolCall = toolCalls[0];
-        console.log(`toolCall`, toolCall);
         const toolResult = await this.aiService.handleReminderToolCall(toolCall, user.id, chatId.toString());
-        console.log(`toolResult`, toolResult);
         if (toolResult.action === 'create_reminder') {
           // Create the reminder
           const reminder = await this.reminderService.createReminder(
@@ -687,10 +698,11 @@ ${totalEntries === 0 ?
         }
       } else {
         // Fallback: Try to parse manually or use AI response text
-        console.log('No tool calls found, trying fallback parsing...');
+        if (process.env.NODE_ENV !== 'production') {
+          console.log('No tool calls found, trying fallback parsing...');
+        }
 
         const aiText = aiResponse.choices?.[0]?.message?.content;
-        console.log('AI response text:', aiText);
 
         // Try simple manual parsing as fallback
         const fallbackReminder = this.parseReminderFallback(reminderText, userTimezone);
@@ -796,25 +808,28 @@ ${totalEntries === 0 ?
       const deletionDescription = match[1];
       const userTimezone = 'Asia/Kolkata'; // TODO: Get from user preferences
 
-      console.log(`Smart deletion request: "${deletionDescription}"`);
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`Smart deletion request: "${deletionDescription}"`);
+      }
 
       // Parse deletion request with AI
       const aiResponse = await this.aiService.parseSmartDeletionRequest(deletionDescription, userTimezone);
-      console.log(`Smart deletion AI response:`, JSON.stringify(aiResponse, null, 2));
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`smart deletion aiResponse received`);
+      }
 
       // Check if AI returned tool calls
       const message = aiResponse.choices?.[0]?.message;
       const toolCalls = message?.tool_calls || message?.toolCalls;
 
-      console.log(`AI message:`, message);
-      console.log(`Tool calls found:`, toolCalls);
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`smart deletion toolCalls count`, toolCalls?.length || 0);
+      }
 
       if (toolCalls && toolCalls.length > 0) {
         const toolCall = toolCalls[0];
-        console.log(`Processing tool call:`, toolCall);
 
         const toolResult = await this.aiService.handleReminderToolCall(toolCall, user.id, chatId.toString());
-        console.log(`Tool result:`, toolResult);
 
         if (toolResult.action === 'match_reminders_for_deletion') {
           // Get user's reminders and match them
@@ -831,11 +846,13 @@ ${totalEntries === 0 ?
             userTimezone
           );
 
-          console.log(`Found ${matches.length} matches:`, matches.map(m => ({
-            title: m.reminder.title,
-            score: m.score,
-            isRecurring: m.isRecurring
-          })));
+          if (process.env.NODE_ENV !== 'production') {
+            console.log(`Found ${matches.length} matches:`, matches.map(m => ({
+              title: m.reminder.title,
+              score: m.score,
+              isRecurring: m.isRecurring
+            })));
+          }
 
           if (matches.length === 0) {
             await this.bot.sendMessage(
@@ -957,7 +974,9 @@ ${totalEntries === 0 ?
             await this.bot.sendMessage(chatId, responseMessage, { parse_mode: 'Markdown' });
           }
         } else {
-          console.log(`Unknown tool result action: ${toolResult.action}`);
+          if (process.env.NODE_ENV !== 'production') {
+            console.log(`Unknown tool result action: ${toolResult.action}`);
+          }
           await this.bot.sendMessage(
             chatId,
             `❌ I couldn't process the deletion request. Please try again or use /list_reminders to see your reminders.`
@@ -965,7 +984,9 @@ ${totalEntries === 0 ?
         }
       } else {
         // AI couldn't parse the deletion request or no tool calls found
-        console.log(`No tool calls found in AI response`);
+        if (process.env.NODE_ENV !== 'production') {
+          console.log(`No tool calls found in AI response`);
+        }
 
         // Try to provide a helpful response based on the AI's text response
         const aiText = message?.content;
@@ -1051,7 +1072,9 @@ ${totalEntries === 0 ?
   // Fallback parsing method for simple reminders
   private parseReminderFallback(text: string, timezone: string = 'Asia/Kolkata'): any | null {
     try {
-      console.log('Fallback parsing input:', text);
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('Fallback parsing input:', text);
+      }
 
       // Simple regex patterns for common reminder formats
       const patterns = [
@@ -1063,7 +1086,9 @@ ${totalEntries === 0 ?
 
       for (const pattern of patterns) {
         const match = text.match(pattern);
-        console.log('Pattern match:', pattern, match);
+        if (process.env.NODE_ENV !== 'production') {
+          console.log('Pattern match:', pattern, match);
+        }
 
         if (match) {
           const title = match[1].trim();
@@ -1083,11 +1108,15 @@ ${totalEntries === 0 ?
             const minutes = parseInt(match[4]);
             const ampm = match[5].toLowerCase();
 
-            console.log('Parsing time:', hours, minutes, ampm);
+            if (process.env.NODE_ENV !== 'production') {
+              console.log('Parsing time:', hours, minutes, ampm);
+            }
 
             // Validate parsed values
             if (isNaN(hours) || isNaN(minutes)) {
-              console.log('Invalid time values, using default');
+              if (process.env.NODE_ENV !== 'production') {
+                console.log('Invalid time values, using default');
+              }
               hours = 9;
             } else {
               if (ampm === 'pm' && hours !== 12) hours += 12;
@@ -1109,9 +1138,11 @@ ${totalEntries === 0 ?
             utcDate = targetDate; // Fallback to original time
           }
 
-          console.log('Local target time:', targetDate.toString());
-          console.log('UTC time for storage:', utcDate.toISOString());
-          console.log('Verification - UTC back to local:', utcDate.toLocaleString('en-US', { timeZone: timezone }));
+          if (process.env.NODE_ENV !== 'production') {
+            console.log('Local target time:', targetDate.toString());
+            console.log('UTC time for storage:', utcDate.toISOString());
+            console.log('Verification - UTC back to local:', utcDate.toLocaleString('en-US', { timeZone: timezone }));
+          }
 
           const result = {
             title,
@@ -1122,15 +1153,21 @@ ${totalEntries === 0 ?
             }
           };
 
-          console.log('Fallback parsing result:', result);
+          if (process.env.NODE_ENV !== 'production') {
+            console.log('Fallback parsing result:', result);
+          }
           return result;
         }
       }
 
-      console.log('No pattern matched');
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('No pattern matched');
+      }
       return null;
     } catch (error) {
-      console.error('Fallback parsing error:', error);
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('Fallback parsing error:', error);
+      }
       return null;
     }
   }

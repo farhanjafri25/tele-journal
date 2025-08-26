@@ -15,7 +15,9 @@ const envPath = path.join(
 
 dotenv.config({ path: envPath });
 
-console.log(`process.env.NODE_ENV`, process.env);
+if (process.env.NODE_ENV !== 'production') {
+  console.log(`NODE_ENV`, process.env.NODE_ENV);
+}
 
 export default new DataSource({
   type: 'postgres',

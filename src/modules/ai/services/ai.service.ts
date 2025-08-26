@@ -172,7 +172,9 @@ Examples:
                 toolChoice: 'auto'
             });
 
-            console.log('Mistral API response:', JSON.stringify(response, null, 2));
+            if (process.env.NODE_ENV !== 'production') {
+                console.log('Mistral API response (truncated)');
+            }
             return response;
         } catch (error) {
             this.logger.error('Error parsing reminder request:', error);
@@ -220,12 +222,13 @@ You MUST call the function for every deletion request.`;
             const userMessageFormatted = `Please help me delete this reminder: "${userMessage}"`;
 
             // Debug: Check available tools
-            console.log('Available reminder tools:', reminderTools.map(tool => tool.function.name));
-            console.log('Looking for match_reminders_for_deletion tool...');
+            if (process.env.NODE_ENV !== 'production') {
+                console.log('Available reminder tools:', reminderTools.map(tool => tool.function.name));
+                console.log('Looking for match_reminders_for_deletion tool...');
+            }
             const deletionTool = reminderTools.find(tool => tool.function.name === 'match_reminders_for_deletion');
-            console.log('Deletion tool found:', !!deletionTool);
-            if (deletionTool) {
-                console.log('Deletion tool definition:', JSON.stringify(deletionTool, null, 2));
+            if (process.env.NODE_ENV !== 'production') {
+                console.log('Deletion tool found:', !!deletionTool);
             }
 
             // Try with forced tool choice first
@@ -244,7 +247,9 @@ You MUST call the function for every deletion request.`;
                     }
                 });
             } catch (toolChoiceError) {
-                console.log('Forced tool choice failed, trying with auto:', toolChoiceError);
+                if (process.env.NODE_ENV !== 'production') {
+                    console.log('Forced tool choice failed, trying with auto:', toolChoiceError);
+                }
                 // Fallback to auto tool choice
                 response = await this.mistral?.chat.complete({
                     model: env.MISTRAL_CHAT_MODEL,
@@ -257,7 +262,9 @@ You MUST call the function for every deletion request.`;
                 });
             }
 
-            console.log('Mistral smart deletion response:', JSON.stringify(response, null, 2));
+            if (process.env.NODE_ENV !== 'production') {
+                console.log('Mistral smart deletion response (truncated)');
+            }
             return response;
         } catch (error) {
             this.logger.error('Error parsing smart deletion request:', error);
@@ -267,15 +274,19 @@ You MUST call the function for every deletion request.`;
 
     async handleReminderToolCall(toolCall: any, userId: number, chatRoomId: string): Promise<any> {
         const { name, arguments: args } = toolCall.function;
-        console.log(`toolCall.function`, toolCall.function);
-        console.log(`raw args:`, args, typeof args);
+        if (process.env.NODE_ENV !== 'production') {
+            console.log(`toolCall.function`, toolCall.function);
+            console.log(`raw args:`, args, typeof args);
+        }
 
         // Parse arguments if they're a string
         let parsedArgs: any;
         if (typeof args === 'string') {
             try {
                 parsedArgs = JSON.parse(args);
-                console.log(`parsed args:`, parsedArgs);
+                if (process.env.NODE_ENV !== 'production') {
+                    console.log(`parsed args:`, parsedArgs);
+                }
             } catch (error) {
                 console.error('Error parsing tool call arguments:', error);
                 throw new Error('Invalid tool call arguments format');

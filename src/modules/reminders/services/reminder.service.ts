@@ -18,8 +18,10 @@ export class ReminderService {
     params: CreateReminderParams
   ): Promise<Reminder> {
     try {
-      console.log(`params`, params);
-      console.log('Raw scheduledAt:', params.scheduledAt, typeof params.scheduledAt);
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`params`, params);
+        console.log('Raw scheduledAt:', params.scheduledAt, typeof params.scheduledAt);
+      }
 
       // Handle different date formats
       let scheduledAt: Date;
@@ -55,7 +57,9 @@ export class ReminderService {
         this.logger.warn('Unexpected scheduledAt type, using current time');
       }
 
-      console.log('Parsed scheduledAt:', scheduledAt, 'Valid:', !isNaN(scheduledAt.getTime()));
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('Parsed scheduledAt:', scheduledAt, 'Valid:', !isNaN(scheduledAt.getTime()));
+      }
 
       // Validate the date
       if (isNaN(scheduledAt.getTime())) {
@@ -74,10 +78,12 @@ export class ReminderService {
 
       const nextExecution = this.calculateNextExecution(scheduledAt, params.type as ReminderType, params.recurrencePattern, true);
 
-      console.log('Reminder creation debug:');
-      console.log('- scheduledAt:', scheduledAt);
-      console.log('- nextExecution:', nextExecution);
-      console.log('- type:', params.type);
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('Reminder creation debug:');
+        console.log('- scheduledAt:', scheduledAt);
+        console.log('- nextExecution:', nextExecution);
+        console.log('- type:', params.type);
+      }
 
       const reminderData: Partial<Reminder> = {
         userId,
@@ -93,7 +99,9 @@ export class ReminderService {
       };
 
       const reminder = await this.reminderRepository.create(reminderData);
-      console.log('Created reminder with nextExecution:', reminder.nextExecution);
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('Created reminder with nextExecution:', reminder.nextExecution);
+      }
       this.logger.log(`Created reminder: ${reminder.id} for user: ${userId}`);
       
       return reminder;
