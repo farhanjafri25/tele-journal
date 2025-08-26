@@ -32,9 +32,12 @@ export class TelegramBotService implements OnModuleInit {
   ) {}
 
   onModuleInit() {
-    this.initializeBot();
-    // Connect scheduler with telegram bot service
-    this.reminderSchedulerService.setTelegramBotService(this);
+    setTimeout(() => {
+      this.initializeBot();
+      // Connect scheduler with telegram bot service
+      this.reminderSchedulerService.setTelegramBotService(this);
+      this.logger.log('Telegram bot initialized (staggered)');
+    }, 3000);
   }
 
   private initializeBot() {

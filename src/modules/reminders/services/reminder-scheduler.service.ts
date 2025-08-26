@@ -19,7 +19,10 @@ export class ReminderSchedulerService implements OnModuleInit {
   }
 
   onModuleInit() {
-    this.startScheduler();
+    setTimeout(() => {
+      this.startScheduler();
+      this.logger.log('Reminder scheduler started (staggered)');
+    }, 10000);
   }
 
   private startScheduler() {
