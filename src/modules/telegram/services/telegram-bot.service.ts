@@ -437,16 +437,50 @@ ${totalEntries === 0 ?
       // Find or create user
       const user = await this.userService.findOrCreateUser(telegramId, msg.from?.username);
 
-      // Save journal entry with transcribed text
-      await this.journalService.createEntry(user.id, transcribedText);
+      // Classify intent: is this a reminder request?
+      const intent = await this.aiService.isReminderIntent(transcribedText);
 
-      // Update the processing message with success
+      if (intent.isReminder) {
+        // Parse with AI into reminder params
+        const userTimezone = 'Asia/Kolkata';
+        const aiResponse = await this.aiService.parseReminderRequest(transcribedText, userTimezone);
+
+        const message = aiResponse.choices?.[0]?.message;
+        const toolCalls = message?.tool_calls || message?.toolCalls;
+
+        if (toolCalls && toolCalls.length > 0) {
+          const toolCall = toolCalls[0];
+          const toolResult = await this.aiService.handleReminderToolCall(toolCall, user.id, chatId.toString());
+
+          if (toolResult.action === 'create_reminder') {
+            const reminder = await this.reminderService.createReminder(
+              user.id,
+              chatId.toString(),
+              toolResult.params
+            );
+
+            const scheduledTime = new Date(toolResult.params.scheduledAt).toLocaleString();
+            await this.bot.editMessageText(
+              `✅ Created reminder from your voice note!\n\n📝 ${reminder.title}\n📅 Scheduled for: ${scheduledTime}\n🔄 Type: ${reminder.type}`,
+              { chat_id: chatId, message_id: processingMsg.message_id }
+            );
+            return;
+          }
+        }
+
+        // Fallback: could not parse as reminder
+        await this.bot.editMessageText(
+          `❔ I heard: "${transcribedText}"\nI couldn't confidently create a reminder from this. Try phrasing like "Remind me to..." or use /remind`,
+          { chat_id: chatId, message_id: processingMsg.message_id }
+        );
+        return;
+      }
+
+      // Not a reminder intent: save as journal entry
+      await this.journalService.createEntry(user.id, transcribedText);
       await this.bot.editMessageText(
         `✅ Voice message saved!\n\n📝 Transcribed: "${transcribedText}"`,
-        {
-          chat_id: chatId,
-          message_id: processingMsg.message_id,
-        }
+        { chat_id: chatId, message_id: processingMsg.message_id }
       );
     } catch (error) {
       this.logger.error('Error processing voice message:', error);

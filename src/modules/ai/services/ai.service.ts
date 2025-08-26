@@ -59,6 +59,42 @@ export class AiService {
         return this.speechToTextWithAssemblyAI(audioFilePath);
     }
 
+    async isReminderIntent(text: string): Promise<{ isReminder: boolean; confidence: number; rationale?: string }> {
+        const hay = text.toLowerCase();
+        const keywordMatches = [
+            'remind me',
+            'set a reminder',
+            "don't let me forget",
+            'do not let me forget',
+            'i need to remember',
+            'make a reminder',
+            'create a reminder'
+        ];
+
+        const matched = keywordMatches.some(k => hay.includes(k));
+        if (matched) {
+            return { isReminder: true, confidence: 0.9, rationale: 'Matched reminder phrase keyword' };
+        }
+
+        try {
+            const prompt = [
+                { role: 'system', content: 'You classify if the user intends to create a reminder. Answer strictly as JSON: {"isReminder": boolean, "confidence": number, "reason": string}.' },
+                { role: 'user', content: `Text: "${text}"\nIs the intent to create a reminder?` }
+            ];
+            const res = await this.chat(prompt as any);
+            try {
+                const parsed = JSON.parse(res);
+                return { isReminder: !!parsed.isReminder, confidence: Number(parsed.confidence) || 0.5, rationale: parsed.reason };
+            } catch {
+                const yes = /\byes\b|reminder/i.test(res);
+                return { isReminder: yes, confidence: yes ? 0.6 : 0.2, rationale: 'LLM heuristic fallback' };
+            }
+        } catch (err) {
+            this.logger.warn('Intent classification fallback due to error', err as any);
+            return { isReminder: false, confidence: 0.0 };
+        }
+    }
+
     private async speechToTextWithAssemblyAI(audioFilePath: string): Promise<string> {
         if (!env.ASSEMBLYAI_API_KEY) {
             throw new Error('AssemblyAI API key required for speech-to-text');
