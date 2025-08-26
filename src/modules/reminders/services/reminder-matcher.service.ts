@@ -138,7 +138,7 @@ export class ReminderMatcherService {
   /**
    * Calculate time context matching score
    */
-  private calculateTimeScore(reminder: Reminder, timeContext: string, timezone: string): number {
+  private calculateTimeScore(reminder: Reminder, timeContext: string, _timezone: string): number {
     if (!reminder.nextExecution) return 0;
 
     const now = new Date();
@@ -150,7 +150,19 @@ export class ReminderMatcherService {
     // Check for specific time patterns
     if (timeContextLower.includes('today')) {
       const reminderDate = new Date(reminder.nextExecution.toDateString());
-      return reminderDate.getTime() === today.getTime() ? 1 : 0;
+      const isToday = reminderDate.getTime() === today.getTime();
+
+      // Additional check: if it's today, verify the time hasn't passed
+      if (isToday && reminder.recurrencePattern?.timeOfDay) {
+        const [hours, minutes] = reminder.recurrencePattern.timeOfDay.split(':').map(Number);
+        const scheduledTime = new Date(today);
+        scheduledTime.setHours(hours, minutes, 0, 0);
+
+        // Still consider it a match even if time has passed (let deletion service handle the validation)
+        return 1;
+      }
+
+      return isToday ? 1 : 0;
     }
 
     if (timeContextLower.includes('tomorrow')) {

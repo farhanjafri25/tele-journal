@@ -772,9 +772,15 @@ ${totalEntries === 0 ?
       const message = aiResponse.choices?.[0]?.message;
       const toolCalls = message?.tool_calls || message?.toolCalls;
 
+      console.log(`AI message:`, message);
+      console.log(`Tool calls found:`, toolCalls);
+
       if (toolCalls && toolCalls.length > 0) {
         const toolCall = toolCalls[0];
+        console.log(`Processing tool call:`, toolCall);
+
         const toolResult = await this.aiService.handleReminderToolCall(toolCall, user.id, chatId.toString());
+        console.log(`Tool result:`, toolResult);
 
         if (toolResult.action === 'match_reminders_for_deletion') {
           // Get user's reminders and match them
@@ -790,6 +796,12 @@ ${totalEntries === 0 ?
             toolResult.params,
             userTimezone
           );
+
+          console.log(`Found ${matches.length} matches:`, matches.map(m => ({
+            title: m.reminder.title,
+            score: m.score,
+            isRecurring: m.isRecurring
+          })));
 
           if (matches.length === 0) {
             await this.bot.sendMessage(
@@ -843,9 +855,11 @@ ${totalEntries === 0 ?
                     { parse_mode: 'Markdown' }
                   );
                 } else {
+                  // Handle specific failure cases with appropriate icons and messages
+                  const icon = deletionResult.message.includes('already occurred') ? '⏰' : '❌';
                   await this.bot.sendMessage(
                     chatId,
-                    `❌ **Failed to delete reminder:** ${deletionResult.message}`,
+                    `${icon} **${deletionResult.message}**\n\n🔍 Match confidence: ${Math.round(match.score)}%\n📋 Reasons: ${match.reasons.join(', ')}\n\n💡 **Tip:** You can only delete future reminders or reminders that haven't occurred yet.`,
                     { parse_mode: 'Markdown' }
                   );
                 }
@@ -908,14 +922,32 @@ ${totalEntries === 0 ?
 
             await this.bot.sendMessage(chatId, responseMessage, { parse_mode: 'Markdown' });
           }
+        } else {
+          console.log(`Unknown tool result action: ${toolResult.action}`);
+          await this.bot.sendMessage(
+            chatId,
+            `❌ I couldn't process the deletion request. Please try again or use /list_reminders to see your reminders.`
+          );
         }
       } else {
-        // AI couldn't parse the deletion request
-        await this.bot.sendMessage(
-          chatId,
-          `❌ I couldn't understand your deletion request: "${deletionDescription}"\n\n💡 **Try these formats:**\n• \`/delete_reminder call mom today\`\n• \`/delete_reminder medicine reminder\`\n• \`/delete_reminder the 6pm meeting\`\n• \`/delete_reminder tomorrow's workout\`\n\nOr use \`/list_reminders\` to see all your reminders.`,
-          { parse_mode: 'Markdown' }
-        );
+        // AI couldn't parse the deletion request or no tool calls found
+        console.log(`No tool calls found in AI response`);
+
+        // Try to provide a helpful response based on the AI's text response
+        const aiText = message?.content;
+        if (aiText) {
+          await this.bot.sendMessage(
+            chatId,
+            `❌ I couldn't understand your deletion request: "${deletionDescription}"\n\n🤖 AI Response: ${aiText}\n\n💡 **Try these formats:**\n• \`/delete_reminder call mom today\`\n• \`/delete_reminder medicine reminder\`\n• \`/delete_reminder the 6pm meeting\`\n• \`/delete_reminder tomorrow's workout\`\n\nOr use \`/list_reminders\` to see all your reminders.`,
+            { parse_mode: 'Markdown' }
+          );
+        } else {
+          await this.bot.sendMessage(
+            chatId,
+            `❌ I couldn't understand your deletion request: "${deletionDescription}"\n\n💡 **Try these formats:**\n• \`/delete_reminder call mom today\`\n• \`/delete_reminder medicine reminder\`\n• \`/delete_reminder the 6pm meeting\`\n• \`/delete_reminder tomorrow's workout\`\n\nOr use \`/list_reminders\` to see all your reminders.`,
+            { parse_mode: 'Markdown' }
+          );
+        }
       }
     } catch (error) {
       this.logger.error('Error in smart delete reminder:', error);

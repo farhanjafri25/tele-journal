@@ -24,6 +24,37 @@ export class RecurringDeletionService {
   constructor(private readonly reminderRepository: ReminderRepository) {}
 
   /**
+   * Calculate the actual scheduled time for a specific date and reminder
+   */
+  private calculateScheduledTimeForDate(
+    reminder: Reminder,
+    targetDate: Date,
+    timezone: string = 'Asia/Kolkata'
+  ): Date {
+    const scheduledTime = new Date(targetDate);
+
+    // Set the time of day from the recurrence pattern if available
+    if (reminder.recurrencePattern?.timeOfDay) {
+      const [hours, minutes] = reminder.recurrencePattern.timeOfDay.split(':').map(Number);
+      scheduledTime.setHours(hours, minutes, 0, 0);
+    } else if (reminder.nextExecution) {
+      // Use the time from nextExecution if no timeOfDay pattern
+      scheduledTime.setHours(
+        reminder.nextExecution.getHours(),
+        reminder.nextExecution.getMinutes(),
+        0,
+        0
+      );
+    } else {
+      // Default to current time if no pattern available
+      const now = new Date();
+      scheduledTime.setHours(now.getHours(), now.getMinutes(), 0, 0);
+    }
+
+    return scheduledTime;
+  }
+
+  /**
    * Delete reminder with granular control over recurring reminders
    */
   async deleteWithScope(
@@ -79,10 +110,38 @@ export class RecurringDeletionService {
     timezone: string = 'Asia/Kolkata'
   ): Promise<DeletionResult> {
     // For single occurrence deletion, we need to add an exclusion date
-    // or create a new reminder series that skips this occurrence
-    
+    // but first check if the target time has already passed
+
     const exclusionDate = targetDate || reminder.nextExecution || new Date();
-    
+    const now = new Date();
+
+    // Create the actual scheduled time for the target date
+    const targetScheduledTime = this.calculateScheduledTimeForDate(reminder, exclusionDate, timezone);
+
+    console.log(`Deleting single occurrence for ${reminder.title}`);
+    console.log(`Target date: ${exclusionDate.toISOString()}`);
+    console.log(`Target scheduled time: ${targetScheduledTime.toISOString()}`);
+    console.log(`Current time: ${now.toISOString()}`);
+    console.log(`Has target time passed: ${targetScheduledTime < now}`);
+
+    // Check if the target scheduled time has already passed
+    if (targetScheduledTime < now) {
+      const formattedTime = TimezoneUtils.formatDateInTimezone(targetScheduledTime, timezone);
+      return {
+        success: false,
+        deletionType: 'single',
+        deletedCount: 0,
+        affectedReminders: [],
+        message: `Cannot delete "${reminder.title}" for ${formattedTime} - this reminder has already occurred and cannot be deleted.`
+      };
+    }
+
+    // Check if we're trying to delete a future occurrence that's not the next one
+    if (reminder.nextExecution && targetScheduledTime > reminder.nextExecution) {
+      // For future occurrences beyond the next one, we still allow deletion
+      console.log('Deleting future occurrence beyond next execution');
+    }
+
     // Add exclusion date to the reminder's recurrence pattern
     const updatedPattern = {
       ...reminder.recurrencePattern,
@@ -96,9 +155,15 @@ export class RecurringDeletionService {
       recurrencePattern: updatedPattern
     });
 
+    // Create updated reminder object with new pattern for calculation
+    const updatedReminder = {
+      ...reminder,
+      recurrencePattern: updatedPattern
+    };
+
     // Recalculate next execution to skip the excluded date
     const nextExecution = this.calculateNextExecutionSkippingExclusions(
-      reminder,
+      updatedReminder,
       updatedPattern,
       timezone
     );
@@ -114,14 +179,14 @@ export class RecurringDeletionService {
       });
     }
 
-    const formattedDate = TimezoneUtils.formatDateInTimezone(exclusionDate, timezone);
-    
+    const formattedDate = TimezoneUtils.formatDateInTimezone(targetScheduledTime, timezone);
+
     return {
       success: true,
       deletionType: 'single',
       deletedCount: 1,
       affectedReminders: [reminder.id],
-      message: `Deleted single occurrence of "${reminder.title}" for ${formattedDate}. Future occurrences remain active.`
+      message: `Deleted single occurrence of "${reminder.title}" scheduled for ${formattedDate}. Future occurrences remain active.`
     };
   }
 
@@ -183,48 +248,88 @@ export class RecurringDeletionService {
   private calculateNextExecutionSkippingExclusions(
     reminder: Reminder,
     pattern: any,
-    timezone: string
+    _timezone: string = 'Asia/Kolkata'
   ): Date | null {
     if (!reminder.nextExecution) return null;
 
     const exclusionDates = pattern.exclusionDates || [];
     const exclusionTimes = exclusionDates.map((date: string) => new Date(date).getTime());
-    
-    let nextExecution = new Date(reminder.nextExecution);
+
+    // Start from the current nextExecution or now, whichever is later
+    const now = new Date();
+    let nextExecution = new Date(Math.max(reminder.nextExecution.getTime(), now.getTime()));
+
     const maxIterations = 100; // Prevent infinite loops
     let iterations = 0;
 
+    console.log(`Calculating next execution for ${reminder.title}`);
+    console.log(`Starting from: ${nextExecution.toISOString()}`);
+    console.log(`Exclusion dates: ${exclusionDates}`);
+
     while (iterations < maxIterations) {
       const currentTime = nextExecution.getTime();
-      
-      // Check if current date is excluded
-      const isExcluded = exclusionTimes.some(excludedTime => {
+
+      // Check if current date is excluded (same day comparison)
+      const isExcluded = exclusionTimes.some((excludedTime: number) => {
         const dayDiff = Math.abs(currentTime - excludedTime) / (1000 * 60 * 60 * 24);
         return dayDiff < 1; // Same day
       });
 
-      if (!isExcluded) {
+      console.log(`Checking ${nextExecution.toISOString()}: excluded=${isExcluded}, inFuture=${nextExecution > now}`);
+
+      // If not excluded and in the future, this is our next execution
+      if (!isExcluded && nextExecution > now) {
+        console.log(`Found next execution: ${nextExecution.toISOString()}`);
         return nextExecution;
       }
 
       // Move to next occurrence based on reminder type
       switch (reminder.type) {
         case ReminderType.DAILY:
-          nextExecution.setDate(nextExecution.getDate() + 1);
+          nextExecution.setDate(nextExecution.getDate() + (pattern.interval || 1));
           break;
         case ReminderType.WEEKLY:
-          nextExecution.setDate(nextExecution.getDate() + 7);
+          if (pattern.daysOfWeek && pattern.daysOfWeek.length > 0) {
+            // Handle specific days of week
+            const currentDay = nextExecution.getDay();
+            const sortedDays = pattern.daysOfWeek.sort((a: number, b: number) => a - b);
+
+            let nextDay = sortedDays.find((day: number) => day > currentDay);
+            if (!nextDay) {
+              nextDay = sortedDays[0];
+              nextExecution.setDate(nextExecution.getDate() + 7); // Next week
+            }
+
+            const daysToAdd = nextDay - currentDay;
+            nextExecution.setDate(nextExecution.getDate() + daysToAdd);
+          } else {
+            nextExecution.setDate(nextExecution.getDate() + 7 * (pattern.interval || 1));
+          }
           break;
         case ReminderType.MONTHLY:
-          nextExecution.setMonth(nextExecution.getMonth() + 1);
+          nextExecution.setMonth(nextExecution.getMonth() + (pattern.interval || 1));
+          if (pattern.dayOfMonth) {
+            nextExecution.setDate(pattern.dayOfMonth);
+          }
+          break;
+        case ReminderType.YEARLY:
+          nextExecution.setFullYear(nextExecution.getFullYear() + (pattern.interval || 1));
           break;
         default:
+          console.log(`Unknown reminder type: ${reminder.type}`);
           return null;
+      }
+
+      // Set time of day if specified
+      if (pattern.timeOfDay) {
+        const [hours, minutes] = pattern.timeOfDay.split(':').map(Number);
+        nextExecution.setHours(hours, minutes, 0, 0);
       }
 
       iterations++;
     }
 
+    console.log(`No valid next execution found after ${iterations} iterations`);
     return null; // No valid next execution found
   }
 

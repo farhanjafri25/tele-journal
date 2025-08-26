@@ -72,7 +72,7 @@ export class ReminderService {
         scheduledAt.setTime(Date.now() + 60000); // Add 1 minute
       }
 
-      const nextExecution = this.calculateNextExecution(scheduledAt, params.type as ReminderType, params.recurrencePattern);
+      const nextExecution = this.calculateNextExecution(scheduledAt, params.type as ReminderType, params.recurrencePattern, true);
 
       console.log('Reminder creation debug:');
       console.log('- scheduledAt:', scheduledAt);
@@ -147,7 +147,8 @@ export class ReminderService {
     const nextExecution = this.calculateNextExecution(
       reminder.nextExecution,
       reminder.type,
-      reminder.recurrencePattern
+      reminder.recurrencePattern,
+      false
     );
 
     await this.reminderRepository.markAsExecuted(reminder.id, nextExecution ?? undefined, reminder.type as ReminderType | null);
@@ -156,13 +157,126 @@ export class ReminderService {
   private calculateNextExecution(
     currentTime: Date,
     type: ReminderType,
-    pattern?: any
+    pattern?: any,
+    isInitialScheduling: boolean = false
   ): Date | null {
     if (type === ReminderType.ONCE) {
       // For one-time reminders, the next execution is the scheduled time itself
       return new Date(currentTime);
     }
 
+    // For initial scheduling, check if we can schedule for today first
+    if (isInitialScheduling) {
+      return this.calculateInitialRecurringExecution(currentTime, type, pattern);
+    }
+
+    // For subsequent executions after a reminder has fired
+    return this.calculateSubsequentExecution(currentTime, type, pattern);
+  }
+
+  /**
+   * Calculate the first execution time for a new recurring reminder
+   */
+  private calculateInitialRecurringExecution(
+    scheduledTime: Date,
+    type: ReminderType,
+    pattern?: any
+  ): Date | null {
+    const now = new Date();
+    const candidate = new Date(scheduledTime);
+
+    // Set the time of day if specified in pattern
+    if (pattern?.timeOfDay) {
+      const [hours, minutes] = pattern.timeOfDay.split(':').map(Number);
+      candidate.setHours(hours, minutes, 0, 0);
+    }
+
+    switch (type) {
+      case ReminderType.DAILY:
+        // If the time hasn't passed today, schedule for today
+        if (candidate > now) {
+          return candidate;
+        }
+        // Otherwise, schedule for tomorrow
+        candidate.setDate(candidate.getDate() + (pattern?.interval || 1));
+        return candidate;
+
+      case ReminderType.WEEKLY:
+        if (pattern?.daysOfWeek && pattern.daysOfWeek.length > 0) {
+          const currentDay = candidate.getDay();
+          const sortedDays = pattern.daysOfWeek.sort((a: number, b: number) => a - b);
+
+          // Check if today is one of the scheduled days and time hasn't passed
+          if (sortedDays.includes(currentDay) && candidate > now) {
+            return candidate;
+          }
+
+          // Find next scheduled day
+          let nextDay = sortedDays.find((day: number) => day > currentDay);
+          if (!nextDay) {
+            nextDay = sortedDays[0];
+            candidate.setDate(candidate.getDate() + 7); // Next week
+          }
+
+          const daysToAdd = nextDay - currentDay;
+          candidate.setDate(candidate.getDate() + daysToAdd);
+          return candidate;
+        } else {
+          // If time hasn't passed today, schedule for today
+          if (candidate > now) {
+            return candidate;
+          }
+          // Otherwise, schedule for next week
+          candidate.setDate(candidate.getDate() + 7 * (pattern?.interval || 1));
+          return candidate;
+        }
+
+      case ReminderType.MONTHLY:
+        if (pattern?.dayOfMonth) {
+          const targetDay = pattern.dayOfMonth;
+          const currentDay = candidate.getDate();
+
+          // If it's the target day and time hasn't passed, schedule for today
+          if (currentDay === targetDay && candidate > now) {
+            return candidate;
+          }
+
+          // Otherwise, schedule for next month
+          candidate.setMonth(candidate.getMonth() + (pattern?.interval || 1));
+          candidate.setDate(targetDay);
+          return candidate;
+        } else {
+          // If time hasn't passed today, schedule for today
+          if (candidate > now) {
+            return candidate;
+          }
+          // Otherwise, schedule for next month
+          candidate.setMonth(candidate.getMonth() + (pattern?.interval || 1));
+          return candidate;
+        }
+
+      case ReminderType.YEARLY:
+        // If time hasn't passed today, schedule for today
+        if (candidate > now) {
+          return candidate;
+        }
+        // Otherwise, schedule for next year
+        candidate.setFullYear(candidate.getFullYear() + (pattern?.interval || 1));
+        return candidate;
+
+      default:
+        return null;
+    }
+  }
+
+  /**
+   * Calculate the next execution time after a reminder has been executed
+   */
+  private calculateSubsequentExecution(
+    currentTime: Date,
+    type: ReminderType,
+    pattern?: any
+  ): Date | null {
     const next = new Date(currentTime);
 
     switch (type) {
@@ -181,7 +295,7 @@ export class ReminderService {
             nextDay = sortedDays[0];
             next.setDate(next.getDate() + 7); // Next week
           }
-          
+
           const daysToAdd = nextDay - currentDay;
           next.setDate(next.getDate() + daysToAdd);
         } else {

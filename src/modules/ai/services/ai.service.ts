@@ -151,7 +151,9 @@ Examples:
 
 Current date and time in user's timezone (${userTimezone}): ${currentLocalTime}
 
-The user wants to delete a reminder based on their description. Parse their request and extract:
+The user wants to delete a reminder based on their description. You MUST use the match_reminders_for_deletion function to parse their request.
+
+Parse their request and extract:
 1. Key words or phrases that describe the reminder content
 2. Time context (today, tomorrow, specific times, etc.)
 3. Deletion scope for recurring reminders
@@ -163,31 +165,61 @@ IMPORTANT: For recurring reminders, determine the user's intent:
 - FROM DATE: "delete medicine reminders from tomorrow onwards", "stop my workout reminders from next week"
 - AMBIGUOUS: When unclear, mark as ambiguous for user clarification
 
-Use the match_reminders_for_deletion function with these parameters:
+ALWAYS call the match_reminders_for_deletion function with these parameters:
+- description: The original user request
+- keywords: Array of key words from the reminder description
+- timeContext: Time references like "today", "tomorrow", etc.
 - deletionScope: "single" | "series" | "from_date" | "ambiguous"
 - recurringIntent: "single_occurrence" | "entire_series" | "future_from_date" | "unclear"
 - scopeDate: ISO date for single occurrence or start date for from_date scope
+- confidence: "high" | "medium" | "low"
 
 Examples:
-- "delete my call mom reminder for today" → keywords: ["call", "mom"], timeContext: "today", deletionScope: "single", recurringIntent: "single_occurrence", scopeDate: "2025-08-25"
-- "remove all medicine reminders" → keywords: ["medicine"], deletionScope: "series", recurringIntent: "entire_series"
-- "delete the medicine reminder" → keywords: ["medicine"], deletionScope: "ambiguous", recurringIntent: "unclear" (could be single or series)
-- "cancel workout reminders from tomorrow onwards" → keywords: ["workout"], timeContext: "tomorrow", deletionScope: "from_date", recurringIntent: "future_from_date", scopeDate: "2025-08-26"
-- "delete this week's workout reminders" → keywords: ["workout"], timeContext: "this week", deletionScope: "single", recurringIntent: "single_occurrence"
+- "delete my call mom reminder for today" → match_reminders_for_deletion(description="delete my call mom reminder for today", keywords=["call", "mom"], timeContext="today", deletionScope="single", recurringIntent="single_occurrence", scopeDate="2025-08-26", confidence="high")
+- "remove all medicine reminders" → match_reminders_for_deletion(description="remove all medicine reminders", keywords=["medicine"], deletionScope="series", recurringIntent="entire_series", confidence="high")
+- "delete the medicine reminder" → match_reminders_for_deletion(description="delete the medicine reminder", keywords=["medicine"], deletionScope="ambiguous", recurringIntent="unclear", confidence="medium")
 
-Be intelligent about detecting recurring vs one-time deletion intent based on language cues.`;
+You MUST call the function for every deletion request.`;
 
             const userMessageFormatted = `Please help me delete this reminder: "${userMessage}"`;
 
-            const response = await this.mistral?.chat.complete({
-                model: env.MISTRAL_CHAT_MODEL,
-                messages: [
-                    { role: 'system', content: systemPrompt },
-                    { role: 'user', content: userMessageFormatted }
-                ],
-                tools: reminderTools,
-                toolChoice: 'auto'
-            });
+            // Debug: Check available tools
+            console.log('Available reminder tools:', reminderTools.map(tool => tool.function.name));
+            console.log('Looking for match_reminders_for_deletion tool...');
+            const deletionTool = reminderTools.find(tool => tool.function.name === 'match_reminders_for_deletion');
+            console.log('Deletion tool found:', !!deletionTool);
+            if (deletionTool) {
+                console.log('Deletion tool definition:', JSON.stringify(deletionTool, null, 2));
+            }
+
+            // Try with forced tool choice first
+            let response: any;
+            try {
+                response = await this.mistral?.chat.complete({
+                    model: env.MISTRAL_CHAT_MODEL,
+                    messages: [
+                        { role: 'system', content: systemPrompt },
+                        { role: 'user', content: userMessageFormatted }
+                    ],
+                    tools: reminderTools,
+                    toolChoice: {
+                        type: 'function',
+                        function: { name: 'match_reminders_for_deletion' }
+                    }
+                });
+            } catch (toolChoiceError) {
+                console.log('Forced tool choice failed, trying with auto:', toolChoiceError);
+                // Fallback to auto tool choice
+                response = await this.mistral?.chat.complete({
+                    model: env.MISTRAL_CHAT_MODEL,
+                    messages: [
+                        { role: 'system', content: systemPrompt },
+                        { role: 'user', content: userMessageFormatted }
+                    ],
+                    tools: reminderTools,
+                    toolChoice: 'auto'
+                });
+            }
 
             console.log('Mistral smart deletion response:', JSON.stringify(response, null, 2));
             return response;
