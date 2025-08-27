@@ -4,6 +4,11 @@ import { Reminder, ReminderType, ReminderStatus } from '../entities/reminder.ent
 import { CreateReminderParams, UpdateReminderParams } from '../tools/reminder-tools';
 import { TimezoneUtils } from '../utils/timezone.utils';
 
+// Helper function to escape markdown characters for Telegram
+function escapeMarkdown(text: string): string {
+  return text.replace(/[_*[\]()~`>#+=|{}.!-]/g, '\\$&');
+}
+
 @Injectable()
 export class ReminderService {
   private readonly logger = new Logger(ReminderService.name);
@@ -362,11 +367,11 @@ export class ReminderService {
         nextTime = TimezoneUtils.formatDateInTimezone(reminder.nextExecution, timezone);
       }
 
-      message += `${index + 1}. **${reminder.title}**\n`;
+      message += `${index + 1}. **${escapeMarkdown(reminder.title)}**\n`;
       message += `   📅 Next: ${nextTime}\n`;
       message += `   🔄 Type: ${reminder.type}\n`;
       if (reminder.description) {
-        message += `   📝 ${reminder.description}\n`;
+        message += `   📝 ${escapeMarkdown(reminder.description)}\n`;
       }
       message += `   🆔 ID: \`${reminder.id}\`\n\n`;
     });

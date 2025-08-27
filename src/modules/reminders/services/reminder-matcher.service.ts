@@ -3,6 +3,11 @@ import { Reminder } from '../entities/reminder.entity';
 import { MatchRemindersForDeletionParams } from '../tools/reminder-tools';
 import { TimezoneUtils } from '../utils/timezone.utils';
 
+// Helper function to escape markdown characters for Telegram
+function escapeMarkdown(text: string): string {
+  return text.replace(/[_*[\]()~`>#+=|{}.!-]/g, '\\$&');
+}
+
 export interface ReminderMatch {
   reminder: Reminder;
   score: number;
@@ -283,7 +288,7 @@ export class ReminderMatcherService {
       const recurringIcon = match.isRecurring ? '🔄' : '📅';
       const recurringText = match.isRecurring ? ` (${match.reminder.type} recurring)` : ' (one-time)';
 
-      message += `${index + 1}. **${match.reminder.title}** (${Math.round(match.score)}% match)\n`;
+      message += `${index + 1}. **${escapeMarkdown(match.reminder.title)}** (${Math.round(match.score)}% match)\n`;
       message += `   ${recurringIcon} Next: ${nextTime}${recurringText}\n`;
       message += `   🔍 Reasons: ${match.reasons.join(', ')}\n`;
 
@@ -310,7 +315,7 @@ export class ReminderMatcherService {
       ? TimezoneUtils.formatDateInTimezone(reminder.nextExecution, timezone)
       : 'Completed';
 
-    return `🔄 **"${reminder.title}" is a recurring reminder**\n\n` +
+    return `🔄 **"${escapeMarkdown(reminder.title)}" is a recurring reminder**\n\n` +
            `📅 Next occurrence: ${nextTime}\n` +
            `🔄 Type: ${reminder.type}\n\n` +
            `**Choose deletion scope:**\n` +
@@ -318,8 +323,8 @@ export class ReminderMatcherService {
            `2️⃣ Delete entire recurring series\n` +
            `3️⃣ Stop from specific date onwards\n\n` +
            `💡 Use:\n` +
-           `• \`/delete_reminder today's ${reminder.title.toLowerCase()}\` for single occurrence\n` +
-           `• \`/delete_reminder all ${reminder.title.toLowerCase()} reminders\` for entire series\n` +
+           `• \`/delete_reminder today's ${escapeMarkdown(reminder.title.toLowerCase())}\` for single occurrence\n` +
+           `• \`/delete_reminder all ${escapeMarkdown(reminder.title.toLowerCase())} reminders\` for entire series\n` +
            `• \`/cancel_reminder ${reminder.id}\` for precise control`;
   }
 }

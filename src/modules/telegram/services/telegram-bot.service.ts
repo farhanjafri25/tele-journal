@@ -14,6 +14,11 @@ import * as fs from 'fs-extra';
 import * as path from 'path';
 import axios from 'axios';
 
+// Helper function to escape markdown characters for Telegram
+function escapeMarkdown(text: string): string {
+  return text.replace(/[_*[\]()~`>#+=|{}.!-]/g, '\\$&');
+}
+
 
 @Injectable()
 export class TelegramBotService implements OnModuleInit {
@@ -201,19 +206,19 @@ export class TelegramBotService implements OnModuleInit {
       await this.userService.findOrCreateUser(telegramId, username);
       
       const welcomeMessage = `
-🌟 Welcome to your Personal Journal Bot! 🌟
+🌟 Welcome to your Personal Journal Bot\\! 🌟
 
-I'm here to help you capture your thoughts, experiences, and reflections. Here's how I work:
+I'm here to help you capture your thoughts, experiences, and reflections\\. Here's how I work:
 
-📝 **Journaling**: Send me text messages or 🎤 voice messages - I'll save them as journal entries
+📝 **Journaling**: Send me text messages or 🎤 voice messages \\- I'll save them as journal entries
 🔍 **Querying**: Use /query <your question> to ask about your past entries
 📊 **Summary**: Use /summary to get insights about your recent entries
 📈 **Stats**: Use /stats to see your journaling statistics
 
-Start by sharing what's on your mind today - type or speak! ✨
+Start by sharing what's on your mind today \\- type or speak\\! ✨
       `;
       
-      await this.bot.sendMessage(chatId, welcomeMessage);
+      await this.bot.sendMessage(chatId, welcomeMessage, { parse_mode: 'Markdown' });
     } catch (error) {
       this.logger.error('Error in start command:', error);
       await this.bot.sendMessage(chatId, 'Sorry, something went wrong. Please try again later.');
@@ -228,35 +233,35 @@ Start by sharing what's on your mind today - type or speak! ✨
 
 📝 **Journaling**:
 • Type any message to create a journal entry
-• 🎤 Send voice messages - I'll transcribe them automatically!
-• 🎵 Send audio files - I'll convert speech to text
+• 🎤 Send voice messages \\- I'll transcribe them automatically\\!
+• 🎵 Send audio files \\- I'll convert speech to text
 • I'll automatically save and analyze your thoughts
 
 🔍 **Querying**:
-• /query <question> - Ask about your journal entries
-• Example: "/query How was my mood last week?"
+• /query <question> \\- Ask about your journal entries
+• Example: "/query How was my mood last week\\?"
 
 📊 **Insights**:
-• /summary - Get a summary of your recent entries
-• /stats - View your journaling statistics
+• /summary \\- Get a summary of your recent entries
+• /stats \\- View your journaling statistics
 
 ⏰ **Reminders**:
-• /remind [text] - Create a smart reminder (e.g., "remind me to call mom tomorrow at 3pm")
-• /reminders - List all your active reminders
-• /delete_reminder [reminder description] - Cancel a specific reminder (e.g., "Delete my Reminder to go for groceries today at 6pm")
+• /remind [text] \\- Create a smart reminder \\(e\\.g\\., "remind me to call mom tomorrow at 3pm"\\) 
+• /reminders \\- List all your active reminders
+• /delete\\_reminder [reminder description] \\- Cancel a specific reminder \\(e\\.g\\., "Delete my Reminder to go for groceries today at 6pm"\\) 
 
 ❓ **Other**:
-• /help - Show this help message
-• /start - Restart the bot
+• /help \\- Show this help message
+• /start \\- Restart the bot
 
 💡 **Tips**:
 • Be descriptive in your entries for better insights
-• Voice messages are great for quick journaling on the go!
+• Voice messages are great for quick journaling on the go\\!
 • Ask specific questions for more accurate responses
-• Regular journaling helps me understand you better!
+• Regular journaling helps me understand you better\\!
     `;
     
-    await this.bot.sendMessage(chatId, helpMessage);
+          await this.bot.sendMessage(chatId, helpMessage, { parse_mode: 'Markdown' });
   }
 
   private async handleQueryCommand(msg: TelegramBot.Message, query: string) {
@@ -282,7 +287,10 @@ Start by sharing what's on your mind today - type or speak! ✨
       // Query journal entries
       const response = await this.journalQueryService.queryJournal(user.id, query);
       
-      let replyMessage = `🤔 **Your Question**: ${query}\n\n`;
+      // Escape special characters in the query for markdown
+      const escapedQuery = escapeMarkdown(query);
+      
+      let replyMessage = `🤔 **Your Question**: ${escapedQuery}\n\n`;
       replyMessage += `💭 **My Response**:\n${response.answer}`;
       
       if (response.relevantEntries.length > 0) {
@@ -290,7 +298,7 @@ Start by sharing what's on your mind today - type or speak! ✨
         replyMessage += `\n🎯 **Confidence**: ${response.confidence}%`;
       }
 
-      await this.bot.sendMessage(chatId, replyMessage);
+      await this.bot.sendMessage(chatId, replyMessage, { parse_mode: 'Markdown' });
     } catch (error) {
       this.logger.error('Error in query command:', error);
       await this.bot.sendMessage(chatId, 'Sorry, I encountered an error while processing your query. Please try again.');
@@ -319,7 +327,7 @@ Start by sharing what's on your mind today - type or speak! ✨
       
       const replyMessage = `📖 **Your Journal Summary**\n\n${summary}`;
       
-      await this.bot.sendMessage(chatId, replyMessage);
+      await this.bot.sendMessage(chatId, replyMessage, { parse_mode: 'Markdown' });
     } catch (error) {
       this.logger.error('Error in summary command:', error);
       await this.bot.sendMessage(chatId, 'Sorry, I encountered an error while generating your summary. Please try again.');
@@ -358,7 +366,7 @@ ${totalEntries === 0 ?
 }
       `;
       
-      await this.bot.sendMessage(chatId, statsMessage);
+      await this.bot.sendMessage(chatId, statsMessage, { parse_mode: 'Markdown' });
     } catch (error) {
       this.logger.error('Error in stats command:', error);
       await this.bot.sendMessage(chatId, 'Sorry, I encountered an error while fetching your stats. Please try again.');
@@ -642,7 +650,8 @@ ${totalEntries === 0 ?
           const scheduledTime = new Date(toolResult.params.scheduledAt).toLocaleString();
           await this.bot.sendMessage(
             chatId,
-            `✅ Reminder created!\n\n📝 **${reminder.title}**\n📅 Scheduled for: ${scheduledTime}\n🔄 Type: ${reminder.type}\n\n🆔 ID: \`${reminder.id}\``
+            `✅ Reminder created\\!\n\n📝 **${escapeMarkdown(reminder.title)}**\n📅 Scheduled for: ${scheduledTime}\n🔄 Type: ${reminder.type}\n\n🆔 ID: \`${reminder.id}\``,
+            { parse_mode: 'Markdown' }
           );
         } else if (toolResult.action === 'match_reminders_for_deletion') {
           // Handle smart reminder matching for deletion
@@ -664,7 +673,8 @@ ${totalEntries === 0 ?
             await this.reminderService.deleteReminder(reminder.id);
             await this.bot.sendMessage(
               chatId,
-              `✅ Deleted reminder: **${reminder.title}**\n\n🔍 Match confidence: ${Math.round(matches[0].score)}%\n📝 Reasons: ${matches[0].reasons.join(', ')}`
+              `✅ Deleted reminder: **${escapeMarkdown(reminder.title)}**\n\n🔍 Match confidence: ${Math.round(matches[0].score)}%\n📝 Reasons: ${matches[0].reasons.join(', ')}`,
+              { parse_mode: 'Markdown' }
             );
           } else {
             // Multiple matches or low confidence - show options
@@ -677,7 +687,7 @@ ${totalEntries === 0 ?
                 const nextTime = match.reminder.nextExecution
                   ? TimezoneUtils.formatDateInTimezone(match.reminder.nextExecution, userTimezone)
                   : 'Completed';
-                message += `${index + 1}. **${match.reminder.title}** (${Math.round(match.score)}%)\n`;
+                message += `${index + 1}. **${escapeMarkdown(match.reminder.title)}** (${Math.round(match.score)}%)\n`;
                 message += `   📅 Next: ${nextTime}\n`;
                 message += `   🆔 ID: \`${match.reminder.id}\`\n\n`;
               });
@@ -689,7 +699,7 @@ ${totalEntries === 0 ?
                 const nextTime = match.reminder.nextExecution
                   ? TimezoneUtils.formatDateInTimezone(match.reminder.nextExecution, userTimezone)
                   : 'Completed';
-                message += `${index + 1}. **${match.reminder.title}** (${Math.round(match.score)}%)\n`;
+                message += `${index + 1}. **${escapeMarkdown(match.reminder.title)}** (${Math.round(match.score)}%)\n`;
                 message += `   📅 Next: ${nextTime}\n`;
                 message += `   🆔 ID: \`${match.reminder.id}\`\n\n`;
               });
@@ -719,7 +729,8 @@ ${totalEntries === 0 ?
           const scheduledTime = new Date(fallbackReminder.scheduledAt).toLocaleString();
           await this.bot.sendMessage(
             chatId,
-            `✅ Reminder created (fallback parsing)!\n\n📝 **${reminder.title}**\n📅 Scheduled for: ${scheduledTime}\n🔄 Type: ${reminder.type}\n\n🆔 ID: \`${reminder.id}\``
+            `✅ Reminder created \\(fallback parsing\\)\\!\n\n📝 **${escapeMarkdown(reminder.title)}**\n📅 Scheduled for: ${scheduledTime}\n🔄 Type: ${reminder.type}\n\n🆔 ID: \`${reminder.id}\``,
+            { parse_mode: 'Markdown' }
           );
         } else {
           // AI couldn't parse the reminder
@@ -877,7 +888,7 @@ ${totalEntries === 0 ?
 
               await this.bot.sendMessage(
                 chatId,
-                `✅ **Deleted reminder successfully!**\n\n📝 **${reminder.title}**\n📅 Was scheduled for: ${nextTime}\n\n🔍 Match confidence: ${Math.round(match.score)}%\n📋 Reasons: ${match.reasons.join(', ')}`,
+                `✅ **Deleted reminder successfully\\!**\n\n📝 **${escapeMarkdown(reminder.title)}**\n📅 Was scheduled for: ${nextTime}\n\n🔍 Match confidence: ${Math.round(match.score)}%\n📋 Reasons: ${match.reasons.join(', ')}`,
                 { parse_mode: 'Markdown' }
               );
             } else {
@@ -934,7 +945,7 @@ ${totalEntries === 0 ?
                 const recurringIcon = match.isRecurring ? '🔄' : '📅';
                 const recurringText = match.isRecurring ? ` (${match.reminder.type} recurring)` : ' (one-time)';
 
-                responseMessage += `${index + 1}. **${match.reminder.title}** (${Math.round(match.score)}% match)\n`;
+                responseMessage += `${index + 1}. **${escapeMarkdown(match.reminder.title)}** (${Math.round(match.score)}% match)\n`;
                 responseMessage += `   ${recurringIcon} Next: ${nextTime}${recurringText}\n`;
                 responseMessage += `   🔍 Why: ${match.reasons.join(', ')}\n`;
 
@@ -961,7 +972,7 @@ ${totalEntries === 0 ?
                 const recurringIcon = match.isRecurring ? '🔄' : '📅';
                 const recurringText = match.isRecurring ? ` (${match.reminder.type})` : '';
 
-                responseMessage += `${index + 1}. **${match.reminder.title}** (${Math.round(match.score)}% match)\n`;
+                responseMessage += `${index + 1}. **${escapeMarkdown(match.reminder.title)}** (${Math.round(match.score)}% match)\n`;
                 responseMessage += `   ${recurringIcon} Next: ${nextTime}${recurringText}\n`;
                 responseMessage += `   🆔 ID: \`${match.reminder.id}\`\n\n`;
               });
@@ -1052,7 +1063,7 @@ ${totalEntries === 0 ?
         const now = new Date();
         const isDue = reminder.nextExecution && reminder.nextExecution <= now;
 
-        debugMessage += `${index + 1}. **${reminder.title}**\n`;
+        debugMessage += `${index + 1}. **${escapeMarkdown(reminder.title)}**\n`;
         debugMessage += `   📅 Scheduled: ${reminder.scheduledAt?.toISOString()}\n`;
         debugMessage += `   ⏰ Next Exec: ${reminder.nextExecution?.toISOString() || 'null'}\n`;
         debugMessage += `   🔄 Type: ${reminder.type}\n`;
@@ -1179,10 +1190,10 @@ ${totalEntries === 0 ?
   async sendReminderNotification(reminder: any) {
     try {
       const chatId = reminder.chatRoomId;
-      let message = `🔔 **Reminder**\n\n📝 ${reminder.title}`;
+      let message = `🔔 **Reminder**\n\n📝 ${escapeMarkdown(reminder.title)}`;
 
       if (reminder.description) {
-        message += `\n\n${reminder.description}`;
+        message += `\n\n${escapeMarkdown(reminder.description)}`;
       }
 
       // Format time in user's timezone
