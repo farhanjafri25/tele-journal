@@ -176,8 +176,21 @@ export class TelegramBotService implements OnModuleInit {
   private setupMessageHandlers() {
     // Handle regular text messages as journal entries
     this.bot.on('message', async (msg) => {
-      // Skip if it's a command
-      if (msg.text?.startsWith('/')) {
+      const chatId = msg.chat.id;
+      const msgText = msg.text;
+
+      if (msgText && msgText.split('/').length > 2) {
+        await this.bot.sendMessage(chatId, MULTIPLE_COMMANDS_ERROR, { parse_mode: 'Markdown' });
+        return;
+      }
+
+      // Check for invalid commands
+      if (msgText?.startsWith('/')) {
+        const command = msgText.split(' ')[0];
+        if (!QUERY_COMMANDS.includes(command)) {
+          await this.bot.sendMessage(chatId, DEFAULT_MESSAGE_FOR_WRONG_COMMAND, { parse_mode: 'Markdown' });
+          return;
+        }
         return;
       }
 
