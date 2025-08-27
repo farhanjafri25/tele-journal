@@ -13,6 +13,7 @@ import { TimezoneUtils } from '../../reminders/utils/timezone.utils';
 import * as fs from 'fs-extra';
 import * as path from 'path';
 import axios from 'axios';
+import { DEFAULT_MESSAGE_FOR_WRONG_COMMAND, QUERY_COMMANDS } from 'src/constants/constants';
 
 // Helper function to escape markdown characters for Telegram
 function escapeMarkdown(text: string): string {
@@ -34,7 +35,7 @@ export class TelegramBotService implements OnModuleInit {
     private readonly reminderSchedulerService: ReminderSchedulerService,
     private readonly reminderMatcherService: ReminderMatcherService,
     private readonly recurringDeletionService: RecurringDeletionService,
-  ) {}
+  ) { }
 
   onModuleInit() {
     setTimeout(() => {
@@ -85,6 +86,15 @@ export class TelegramBotService implements OnModuleInit {
     this.bot.on('webhook_error', (error: any) => {
       this.logger.error('Webhook error:', error);
     });
+
+    this.bot.on('message', async (msg) => {
+      let chat = msg.chat.id;
+      let msgText = msg.text;
+      if (msgText?.startsWith('/') && !QUERY_COMMANDS.includes(msgText.split(' ')[0])) {
+        let text = DEFAULT_MESSAGE_FOR_WRONG_COMMAND;
+        await this.bot.sendMessage(chat, text, { parse_mode: 'Markdown' });
+      }
+    })
   }
 
   // Helper method to send messages with retry logic
@@ -151,16 +161,6 @@ export class TelegramBotService implements OnModuleInit {
     this.bot.onText(/\/delete_reminder (.+)/, async (msg, match) => {
       await this.handleSmartDeleteReminderCommand(msg, match);
     });
-
-    // Debug command to trigger due reminders manually
-    this.bot.onText(/\/test_reminders/, async (msg) => {
-      await this.handleTestRemindersCommand(msg);
-    });
-
-    // Debug command to check reminder details
-    this.bot.onText(/\/debug_reminders/, async (msg) => {
-      await this.handleDebugRemindersCommand(msg);
-    });
   }
 
   private setupMessageHandlers() {
@@ -204,7 +204,7 @@ export class TelegramBotService implements OnModuleInit {
     try {
       // Create or find user
       await this.userService.findOrCreateUser(telegramId, username);
-      
+
       const welcomeMessage = `
 🌟 Welcome to your Personal Journal Bot\\! 🌟
 
@@ -217,7 +217,7 @@ I'm here to help you capture your thoughts, experiences, and reflections\\. Here
 
 Start by sharing what's on your mind today \\- type or speak\\! ✨
       `;
-      
+
       await this.bot.sendMessage(chatId, welcomeMessage, { parse_mode: 'Markdown' });
     } catch (error) {
       this.logger.error('Error in start command:', error);
@@ -227,7 +227,7 @@ Start by sharing what's on your mind today \\- type or speak\\! ✨
 
   private async handleHelpCommand(msg: TelegramBot.Message) {
     const chatId = msg.chat.id;
-    
+
     const helpMessage = `
 🤖 **Journal Bot Commands**
 
@@ -260,8 +260,8 @@ Start by sharing what's on your mind today \\- type or speak\\! ✨
 • Ask specific questions for more accurate responses
 • Regular journaling helps me understand you better\\!
     `;
-    
-          await this.bot.sendMessage(chatId, helpMessage, { parse_mode: 'Markdown' });
+
+    await this.bot.sendMessage(chatId, helpMessage, { parse_mode: 'Markdown' });
   }
 
   private async handleQueryCommand(msg: TelegramBot.Message, query: string) {
@@ -286,13 +286,13 @@ Start by sharing what's on your mind today \\- type or speak\\! ✨
 
       // Query journal entries
       const response = await this.journalQueryService.queryJournal(user.id, query);
-      
+
       // Escape special characters in the query for markdown
       const escapedQuery = escapeMarkdown(query);
-      
+
       let replyMessage = `🤔 **Your Question**: ${escapedQuery}\n\n`;
       replyMessage += `💭 **My Response**:\n${response.answer}`;
-      
+
       if (response.relevantEntries.length > 0) {
         replyMessage += `\n\n📚 **Based on ${response.relevantEntries.length} relevant entries**`;
         replyMessage += `\n🎯 **Confidence**: ${response.confidence}%`;
@@ -324,9 +324,9 @@ Start by sharing what's on your mind today \\- type or speak\\! ✨
       await this.bot.sendChatAction(chatId, 'typing');
 
       const summary = await this.journalQueryService.getJournalSummary(user.id);
-      
+
       const replyMessage = `📖 **Your Journal Summary**\n\n${summary}`;
-      
+
       await this.bot.sendMessage(chatId, replyMessage, { parse_mode: 'Markdown' });
     } catch (error) {
       this.logger.error('Error in summary command:', error);
@@ -352,7 +352,7 @@ Start by sharing what's on your mind today \\- type or speak\\! ✨
 
       const totalEntries = await this.journalService.getUserEntryCount(user.id);
       const recentEntries = await this.journalService.getUserEntries(user.id, 7);
-      
+
       const statsMessage = `
 📊 **Your Journaling Stats**
 
@@ -360,12 +360,12 @@ Start by sharing what's on your mind today \\- type or speak\\! ✨
 📅 **This Week**: ${recentEntries.length} entries
 🗓️ **Member Since**: ${user.createdAt.toLocaleDateString()}
 
-${totalEntries === 0 ? 
-  '💡 Start journaling to see more detailed statistics!' : 
-  '🌟 Keep up the great work with your journaling journey!'
-}
+${totalEntries === 0 ?
+          '💡 Start journaling to see more detailed statistics!' :
+          '🌟 Keep up the great work with your journaling journey!'
+        }
       `;
-      
+
       await this.bot.sendMessage(chatId, statsMessage, { parse_mode: 'Markdown' });
     } catch (error) {
       this.logger.error('Error in stats command:', error);
@@ -384,9 +384,9 @@ ${totalEntries === 0 ?
 
     try {
       const user = await this.userService.findOrCreateUser(telegramId, msg.from?.username);
-      
+
       await this.journalService.createEntry(user.id, text);
-      
+
       const confirmationMessages = [
         '✅ Journal entry saved!',
         '📝 Got it! Entry recorded.',
@@ -394,9 +394,9 @@ ${totalEntries === 0 ?
         '🌟 Entry added successfully!',
         '📖 Recorded in your journal!',
       ];
-      
+
       const randomMessage = confirmationMessages[Math.floor(Math.random() * confirmationMessages.length)];
-      
+
       await this.bot.sendMessage(chatId, randomMessage);
     } catch (error) {
       this.logger.error('Error saving journal entry:', error);
@@ -440,7 +440,7 @@ ${totalEntries === 0 ?
           console.log(`Transcribed text length: ${transcribedText.length}`);
         }
       } finally {
-        await fs.remove(audioFilePath).catch(() => {});
+        await fs.remove(audioFilePath).catch(() => { });
       }
 
       if (!transcribedText.trim()) {
@@ -528,7 +528,7 @@ ${totalEntries === 0 ?
       const transcribedText = await this.aiService.speechToText(audioFilePath);
 
       // Clean up the audio file
-      await fs.remove(audioFilePath).catch(() => {});
+      await fs.remove(audioFilePath).catch(() => { });
 
       if (!transcribedText.trim()) {
         await this.bot.editMessageText('❌ Could not transcribe the audio message. Please try again.', {
