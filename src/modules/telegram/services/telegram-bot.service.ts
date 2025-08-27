@@ -13,7 +13,7 @@ import { TimezoneUtils } from '../../reminders/utils/timezone.utils';
 import * as fs from 'fs-extra';
 import * as path from 'path';
 import axios from 'axios';
-import { DEFAULT_MESSAGE_FOR_WRONG_COMMAND, QUERY_COMMANDS } from 'src/constants/constants';
+import { DEFAULT_MESSAGE_FOR_WRONG_COMMAND, MULTIPLE_COMMANDS_ERROR, QUERY_COMMANDS } from 'src/constants/constants';
 
 // Helper function to escape markdown characters for Telegram
 function escapeMarkdown(text: string): string {
@@ -60,6 +60,16 @@ export class TelegramBotService implements OnModuleInit {
     if (process.env.NODE_ENV !== 'production') {
       this.logger.log('Telegram bot initialized');
     }
+
+    this.bot.on('message', async (msg) => {
+      let chat = msg.chat.id;
+      let msgText = msg.text;
+      if(msgText && msgText?.split('/')?.length > 2) {
+        let text = MULTIPLE_COMMANDS_ERROR;
+        await this.bot.sendMessage(chat, text, { parse_mode: 'Markdown' });
+        return;
+      }
+    })
 
     // Set up command handlers
     this.setupCommands();
