@@ -61,16 +61,6 @@ export class TelegramBotService implements OnModuleInit {
       this.logger.log('Telegram bot initialized');
     }
 
-    this.bot.on('message', async (msg) => {
-      let chat = msg.chat.id;
-      let msgText = msg.text;
-      if(msgText && msgText?.split('/')?.length > 2) {
-        let text = MULTIPLE_COMMANDS_ERROR;
-        await this.bot.sendMessage(chat, text, { parse_mode: 'Markdown' });
-        return;
-      }
-    })
-
     // Set up command handlers
     this.setupCommands();
 
@@ -97,14 +87,20 @@ export class TelegramBotService implements OnModuleInit {
       this.logger.error('Webhook error:', error);
     });
 
-    this.bot.on('message', async (msg) => {
-      let chat = msg.chat.id;
-      let msgText = msg.text;
-      if (msgText?.startsWith('/') && !QUERY_COMMANDS.includes(msgText.split(' ')[0])) {
-        let text = DEFAULT_MESSAGE_FOR_WRONG_COMMAND;
-        await this.bot.sendMessage(chat, text, { parse_mode: 'Markdown' });
-      }
-    })
+  }
+
+  // Helper method to check if message contains multiple commands
+  private hasMultipleCommands(msgText: string | undefined): boolean {
+    return msgText ? msgText.split('/').length > 2 : false;
+  }
+
+  // Helper method to safely execute commands with multiple commands check
+  private async executeCommandSafely(msg: TelegramBot.Message, commandHandler: () => Promise<any>): Promise<void> {
+    if (this.hasMultipleCommands(msg.text)) {
+      await this.bot.sendMessage(msg.chat.id, MULTIPLE_COMMANDS_ERROR, { parse_mode: 'Markdown' });
+      return;
+    }
+    await commandHandler();
   }
 
   // Helper method to send messages with retry logic
@@ -127,68 +123,63 @@ export class TelegramBotService implements OnModuleInit {
   }
 
   private setupCommands() {
+    
     // Start command
     this.bot.onText(/\/start/, async (msg) => {
-      await this.handleStartCommand(msg);
+      await this.executeCommandSafely(msg, () => this.handleStartCommand(msg));
     });
 
     // Help command
     this.bot.onText(/\/help/, async (msg) => {
-      await this.handleHelpCommand(msg);
+      await this.executeCommandSafely(msg, () => this.handleHelpCommand(msg));
     });
 
     // Query command
     this.bot.onText(/\/query (.+)/, async (msg, match) => {
-      if (match && match[1]) {
-        await this.handleQueryCommand(msg, match[1]);
-      }
+      await this.executeCommandSafely(msg, async () => {
+        if (match && match[1]) {
+          await this.handleQueryCommand(msg, match[1]);
+        }
+      });
     });
 
     // Summary command
     this.bot.onText(/\/summary/, async (msg) => {
-      await this.handleSummaryCommand(msg);
+      await this.executeCommandSafely(msg, () => this.handleSummaryCommand(msg));
     });
 
     // Stats command
     this.bot.onText(/\/stats/, async (msg) => {
-      await this.handleStatsCommand(msg);
+      await this.executeCommandSafely(msg, () => this.handleStatsCommand(msg));
     });
 
     // Reminder commands
     this.bot.onText(/\/remind (.+)/, async (msg, match) => {
-      await this.handleReminderCommand(msg, match);
+      await this.executeCommandSafely(msg, () => this.handleReminderCommand(msg, match));
     });
 
     this.bot.onText(/\/reminders/, async (msg) => {
-      await this.handleListRemindersCommand(msg);
+      await this.executeCommandSafely(msg, () => this.handleListRemindersCommand(msg));
     });
 
     this.bot.onText(/\/cancel_reminder (.+)/, async (msg, match) => {
-      await this.handleCancelReminderCommand(msg, match);
+      await this.executeCommandSafely(msg, () => this.handleCancelReminderCommand(msg, match));
     });
 
     // Smart reminder deletion command
     this.bot.onText(/\/delete_reminder (.+)/, async (msg, match) => {
-      await this.handleSmartDeleteReminderCommand(msg, match);
+      await this.executeCommandSafely(msg, () => this.handleSmartDeleteReminderCommand(msg, match));
     });
   }
 
   private setupMessageHandlers() {
     // Handle regular text messages as journal entries
     this.bot.on('message', async (msg) => {
-      const chatId = msg.chat.id;
-      const msgText = msg.text;
-
-      if (msgText && msgText.split('/').length > 2) {
-        await this.bot.sendMessage(chatId, MULTIPLE_COMMANDS_ERROR, { parse_mode: 'Markdown' });
-        return;
-      }
-
       // Check for invalid commands
-      if (msgText?.startsWith('/')) {
-        const command = msgText.split(' ')[0];
+      if (msg?.text?.startsWith('/')) {
+        const command = msg?.text?.split(' ')[0];
         if (!QUERY_COMMANDS.includes(command)) {
-          await this.bot.sendMessage(chatId, DEFAULT_MESSAGE_FOR_WRONG_COMMAND, { parse_mode: 'Markdown' });
+          await this.bot.sendMessage(msg.chat.id, DEFAULT_MESSAGE_FOR_WRONG_COMMAND, { parse_mode: 'Markdown' });
           return;
         }
         return;
