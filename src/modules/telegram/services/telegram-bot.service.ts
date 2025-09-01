@@ -187,18 +187,30 @@ export class TelegramBotService implements OnModuleInit {
 
       // Handle text messages
       if (msg.text) {
+        if(msg?.text?.length && msg?.text?.length > 400) {
+          await this.bot.sendMessage(msg.chat.id, 'Sorry, I can\'t process messages longer than 400 characters yet.', { parse_mode: 'Markdown' });
+          return;
+        }
         await this.handleJournalEntry(msg);
         return;
       }
 
       // Handle voice messages
       if (msg.voice) {
+        if(msg.voice?.duration && msg.voice.duration > 120) {
+          await this.bot.sendMessage(msg.chat.id, 'Sorry, I can\'t process voice messages longer than 120 seconds yet.', { parse_mode: 'Markdown' });
+          return;
+        }
         await this.handleVoiceMessage(msg);
         return;
       }
 
       // Handle audio messages (voice notes)
       if (msg.audio) {
+        if(msg.audio?.duration && msg.audio.duration > 120) {
+          await this.bot.sendMessage(msg.chat.id, 'Sorry, I can\'t process audio messages longer than 120 seconds yet.', { parse_mode: 'Markdown' });
+          return;
+        }
         await this.handleAudioMessage(msg);
         return;
       }
