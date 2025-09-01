@@ -25,6 +25,8 @@ function escapeMarkdown(text: string): string {
 export class TelegramBotService implements OnModuleInit {
   private bot: TelegramBot;
   private readonly logger = new Logger(TelegramBotService.name);
+  
+
 
   constructor(
     private readonly userService: UserService,
@@ -102,6 +104,8 @@ export class TelegramBotService implements OnModuleInit {
     }
     await commandHandler();
   }
+
+
 
   // Helper method to send messages with retry logic
   private async sendMessageWithRetry(chatId: number | string, text: string, options?: any, retries = 3): Promise<any> {
@@ -191,7 +195,32 @@ export class TelegramBotService implements OnModuleInit {
           await this.bot.sendMessage(msg.chat.id, 'Sorry, I can\'t process messages longer than 400 characters yet.', { parse_mode: 'Markdown' });
           return;
         }
-        await this.handleJournalEntry(msg);
+        
+        // Detect message intent
+        const intent = await this.aiService.detectMessageIntent(msg.text);
+        this.logger.debug(`Message intent: ${JSON.stringify(intent)}`);
+        
+        // Lower confidence threshold for better intent detection
+        const confidenceThreshold = 0.3;
+        
+        if (intent.isJournalEntry && intent.confidence > confidenceThreshold) {
+          // Save as journal entry and provide conversational response
+          await this.handleJournalEntry(msg);
+          if (intent.suggestedResponse) {
+            await this.bot.sendMessage(msg.chat.id, intent.suggestedResponse, { parse_mode: 'Markdown' });
+          }
+        } else if (intent.isQuestion && intent.confidence > confidenceThreshold) {
+          // Handle as a question/query
+          await this.handleQuestion(msg, intent);
+        } else if (intent.isCasualChat && intent.confidence > confidenceThreshold) {
+          // Handle as casual chat
+          if (intent.suggestedResponse) {
+            await this.bot.sendMessage(msg.chat.id, intent.suggestedResponse, { parse_mode: 'Markdown' });
+          }
+        } else {
+          // Smart fallback based on intent hints and confidence
+          await this.handleLowConfidenceMessage(msg, intent);
+        }
         return;
       }
 
@@ -427,6 +456,117 @@ ${totalEntries === 0 ?
     } catch (error) {
       this.logger.error('Error saving journal entry:', error);
       await this.bot.sendMessage(chatId, 'Sorry, I couldn\'t save your entry. Please try again.');
+    }
+  }
+
+  private async handleQuestion(msg: TelegramBot.Message, intent: any) {
+    const chatId = msg.chat.id;
+    const telegramId = msg.from?.id;
+    const messageText = msg.text;
+
+    if (!telegramId || !messageText) {
+      await this.bot.sendMessage(chatId, 'Sorry, I could not process your question. Please try again.');
+      return;
+    }
+
+    try {
+      // Find user
+      const user = await this.userService.findOrCreateUser(telegramId, msg.from?.username);
+
+      // Check if it's a question about their journal entries
+      if (messageText.toLowerCase().includes('journal') || 
+          messageText.toLowerCase().includes('entry') || 
+          messageText.toLowerCase().includes('wrote') ||
+          messageText.toLowerCase().includes('said') ||
+          messageText.toLowerCase().includes('thought')) {
+        
+        // Use the existing query functionality
+        await this.handleQueryCommand(msg, messageText);
+        return;
+      }
+
+      // For general questions, provide a helpful response
+      const response = intent.suggestedResponse || 
+        "I'm here to help with your journaling! You can:\n" +
+        "• Ask me about your past entries using /query\n" +
+        "• Get insights with /summary\n" +
+        "• Check your stats with /stats\n" +
+        "• Set reminders with /remind\n\n" +
+        "What would you like to know?";
+
+      await this.bot.sendMessage(chatId, response, { parse_mode: 'Markdown' });
+
+    } catch (error) {
+      this.logger.error('Error handling question:', error);
+      await this.bot.sendMessage(chatId, 'Sorry, there was an error processing your question. Please try again.');
+    }
+  }
+
+  private async handleLowConfidenceMessage(msg: TelegramBot.Message, intent: any) {
+    const chatId = msg.chat.id;
+    const telegramId = msg.from?.id;
+    const messageText = msg.text;
+
+    if (!telegramId || !messageText) {
+      return;
+    }
+
+    try {
+      // Find user
+      const user = await this.userService.findOrCreateUser(telegramId, msg.from?.username);
+
+      // Smart fallback logic based on intent hints and message content
+      const messageLower = messageText.toLowerCase();
+      
+      // Check for obvious question indicators
+      const hasQuestionMark = messageText.includes('?');
+      const hasQuestionWords = /\b(what|how|why|when|where|who|which|can|could|would|will|do|does|is|are|was|were)\b/i.test(messageText);
+      
+      // Check for casual chat indicators
+      const hasGreetingWords = /\b(hello|hi|hey|good morning|good afternoon|good evening|thanks|thank you|bye|goodbye)\b/i.test(messageText);
+      
+      // Check for journal-like content (personal pronouns, feelings, experiences)
+      const hasPersonalContent = /\b(i|me|my|mine|myself|we|us|our|ours|ourselves)\b/i.test(messageText);
+      const hasFeelingWords = /\b(feel|felt|feeling|happy|sad|angry|excited|worried|anxious|calm|peaceful|stressed|relaxed|tired|energetic|confused|clear|sure|unsure|doubt|hope|wish|want|need|like|love|hate|miss|remember|forget)\b/i.test(messageText);
+
+      // Determine the most likely intent based on content analysis
+      let finalIntent = 'journal';
+      let confidence = intent.confidence;
+      let response = '';
+
+      if (hasQuestionMark || hasQuestionWords) {
+        finalIntent = 'question';
+        confidence = Math.max(confidence, 0.6);
+        response = intent.suggestedResponse || "I'd be happy to help! What would you like to know?";
+      } else if (hasGreetingWords) {
+        finalIntent = 'casual';
+        confidence = Math.max(confidence, 0.6);
+        response = intent.suggestedResponse || "Hello! How can I help you today?";
+      } else if (hasPersonalContent && hasFeelingWords) {
+        finalIntent = 'journal';
+        confidence = Math.max(confidence, 0.7);
+        response = intent.suggestedResponse || "Thank you for sharing that with me. I've saved it as a journal entry.";
+      }
+
+      // Log the improved intent detection
+      this.logger.debug(`Improved intent detection: ${finalIntent} (confidence: ${confidence}) for message: "${messageText}"`);
+
+      // Handle based on improved intent
+      if (finalIntent === 'question') {
+        await this.handleQuestion(msg, { ...intent, confidence, suggestedResponse: response });
+      } else if (finalIntent === 'casual') {
+        await this.bot.sendMessage(chatId, response, { parse_mode: 'Markdown' });
+      } else {
+        // Default to journal entry
+        await this.handleJournalEntry(msg);
+        await this.bot.sendMessage(chatId, response, { parse_mode: 'Markdown' });
+      }
+
+    } catch (error) {
+      this.logger.error('Error handling low confidence message:', error);
+      // Final fallback: save as journal entry
+      await this.handleJournalEntry(msg);
+      await this.bot.sendMessage(chatId, "I've saved that as a journal entry. Feel free to ask me questions or just share your thoughts!", { parse_mode: 'Markdown' });
     }
   }
 

@@ -95,6 +95,146 @@ export class AiService {
         }
     }
 
+    async detectMessageIntent(text: string): Promise<{ 
+        isJournalEntry: boolean; 
+        isQuestion: boolean; 
+        isCasualChat: boolean;
+        confidence: number; 
+        rationale?: string;
+        suggestedResponse?: string;
+    }> {
+        try {
+            const prompt = [
+                { 
+                    role: 'system', 
+                    content: `You are an AI assistant that classifies user messages into three categories:
+1. JOURNAL_ENTRY: Personal reflections, experiences, feelings, daily events, thoughts, memories
+2. QUESTION: Direct questions, requests for information, help, or advice
+3. CASUAL_CHAT: Greetings, casual conversation, small talk, thanks
+
+Respond strictly as JSON: {
+  "intent": "JOURNAL_ENTRY|QUESTION|CASUAL_CHAT",
+  "confidence": number (0-1),
+  "reason": "brief explanation",
+  "response": "appropriate conversational response"
+}`
+                },
+                { 
+                    role: 'user', 
+                    content: `Classify this message: "${text}"`
+                }
+            ];
+            
+            const res = await this.chat(prompt as any);
+            try {
+                const parsed = JSON.parse(res);
+                return {
+                    isJournalEntry: parsed.intent === 'JOURNAL_ENTRY',
+                    isQuestion: parsed.intent === 'QUESTION',
+                    isCasualChat: parsed.intent === 'CASUAL_CHAT',
+                    confidence: Number(parsed.confidence) || 0.5,
+                    rationale: parsed.reason,
+                    suggestedResponse: parsed.response
+                };
+            } catch {
+                // Enhanced fallback to simple heuristics if AI response parsing fails
+                const hay = text.toLowerCase();
+                
+                // More comprehensive question detection
+                const hasQuestionMark = /\?$/.test(text);
+                const hasQuestionWords = /\b(what|how|why|when|where|who|which|can|could|would|will|do|does|is|are|was|were)\b/i.test(text);
+                const isQuestion = hasQuestionMark || hasQuestionWords;
+                
+                // More comprehensive casual chat detection
+                const hasGreetingWords = /\b(hello|hi|hey|good morning|good afternoon|good evening|morning|afternoon|evening)\b/i.test(text);
+                const hasThanksWords = /\b(thanks|thank you|thx|ty|appreciate|grateful)\b/i.test(text);
+                const hasFarewellWords = /\b(bye|goodbye|see you|later|take care|good night|night)\b/i.test(text);
+                const isCasual = hasGreetingWords || hasThanksWords || hasFarewellWords;
+                
+                // Enhanced journal entry detection
+                const hasPersonalPronouns = /\b(i|me|my|mine|myself|we|us|our|ours|ourselves)\b/i.test(text);
+                const hasFeelingWords = /\b(feel|felt|feeling|happy|sad|angry|excited|worried|anxious|calm|peaceful|stressed|relaxed|tired|energetic|confused|clear|sure|unsure|doubt|hope|wish|want|need|like|love|hate|miss|remember|forget)\b/i.test(text);
+                const hasExperienceWords = /\b(today|yesterday|tomorrow|week|month|year|morning|afternoon|evening|night|experience|happened|went|did|saw|heard|thought|realized|learned|discovered)\b/i.test(text);
+                
+                const isJournalEntry = !isQuestion && !isCasual && (hasPersonalPronouns || hasFeelingWords || hasExperienceWords);
+                
+                // Calculate confidence based on indicators
+                let confidence = 0.4;
+                if (hasQuestionMark) confidence += 0.2;
+                if (hasQuestionWords) confidence += 0.1;
+                if (hasGreetingWords || hasThanksWords || hasFarewellWords) confidence += 0.2;
+                if (hasPersonalPronouns) confidence += 0.1;
+                if (hasFeelingWords) confidence += 0.1;
+                if (hasExperienceWords) confidence += 0.1;
+                
+                confidence = Math.min(confidence, 0.8); // Cap at 0.8
+                
+                return {
+                    isJournalEntry: isJournalEntry,
+                    isQuestion: isQuestion,
+                    isCasualChat: isCasual,
+                    confidence: confidence,
+                    rationale: 'AI parsing failed, using enhanced fallback heuristics',
+                    suggestedResponse: isQuestion ? "I'd be happy to help! What would you like to know?" : 
+                                      isCasual ? "Hello! How can I help you today?" : 
+                                      this.generateJournalResponse(text)
+                };
+            }
+        } catch (err) {
+            this.logger.warn('Intent classification failed', err as any);
+            
+            // Enhanced final fallback with content analysis
+            const textLower = text.toLowerCase();
+            
+            // Check for obvious indicators even in error cases
+            const hasQuestionMark = text.includes('?');
+            const hasQuestionWords = /\b(what|how|why|when|where|who|which|can|could|would|will|do|does|is|are|was|were)\b/i.test(text);
+            const hasGreetingWords = /\b(hello|hi|hey|good morning|good afternoon|good evening|morning|afternoon|evening)\b/i.test(text);
+            const hasThanksWords = /\b(thanks|thank you|thx|ty|appreciate|grateful)\b/i.test(text);
+            
+            let isQuestion = hasQuestionMark || hasQuestionWords;
+            let isCasual = hasGreetingWords || hasThanksWords;
+            let isJournal = !isQuestion && !isCasual;
+            
+            // Calculate confidence based on available indicators
+            let confidence = 0.3;
+            if (hasQuestionMark) confidence += 0.2;
+            if (hasQuestionWords) confidence += 0.1;
+            if (hasGreetingWords || hasThanksWords) confidence += 0.2;
+            
+            confidence = Math.min(confidence, 0.6); // Cap at 0.6 for error cases
+            
+            return {
+                isJournalEntry: isJournal,
+                isQuestion: isQuestion,
+                isCasualChat: isCasual,
+                confidence: confidence,
+                rationale: 'Classification failed, using emergency fallback with content analysis',
+                suggestedResponse: isQuestion ? "I'd be happy to help! What would you like to know?" : 
+                                  isCasual ? "Hello! How can I help you today?" : 
+                                  this.generateJournalResponse(text)
+            };
+        }
+    }
+
+    private generateJournalResponse(text: string): string {
+        // Memory-efficient response selection using simple array
+        const responses = [
+            "Thank you for sharing that with me.",
+            "I appreciate you taking the time to reflect.",
+            "That's a meaningful reflection.",
+            "Thank you for your honesty.",
+            "I hear you.",
+            "That's an interesting perspective.",
+            "Thank you for sharing.",
+            "I appreciate your reflection.",
+            "That sounds like a significant experience.",
+            "Thank you for being open."
+        ];
+        
+        return responses[Math.floor(Math.random() * responses.length)];
+    }
+
     private async speechToTextWithAssemblyAI(audioFilePath: string): Promise<string> {
         if (!env.ASSEMBLYAI_API_KEY) {
             throw new Error('AssemblyAI API key required for speech-to-text');
