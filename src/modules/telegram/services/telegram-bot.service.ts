@@ -487,12 +487,27 @@ ${totalEntries === 0 ?
 
       // For general questions, provide a helpful response
       const response = intent.suggestedResponse || 
-        "I'm here to help with your journaling! You can:\n" +
-        "• Ask me about your past entries using /query\n" +
-        "• Get insights with /summary\n" +
-        "• Check your stats with /stats\n" +
-        "• Set reminders with /remind\n\n" +
-        "What would you like to know?";
+        `🤖 **I'm your Personal Journal Bot!** 
+
+I'm here to help you with your journaling journey. Here are the things I can do:
+
+📝 **Journaling**:
+• Type any message to create a journal entry
+• 🎤 Send voice messages - I'll transcribe them automatically!
+• 🎵 Send audio files - I'll convert speech to text
+
+🔍 **Querying Your Journal**:
+• /query <question> - Ask about your past entries
+• Example: "/query How was my mood last week?"
+
+📊 **Insights & Analytics**:
+• /summary - Get a summary of your recent entries
+• /stats - View your journaling statistics
+
+⏰ **Reminders**:
+• /remind <what> <when> - Set reminders for yourself
+
+What would you like to know about your journaling or how can I help you today?`;
 
       await this.bot.sendMessage(chatId, response, { parse_mode: 'Markdown' });
 
@@ -537,11 +552,43 @@ ${totalEntries === 0 ?
       if (hasQuestionMark || hasQuestionWords) {
         finalIntent = 'question';
         confidence = Math.max(confidence, 0.6);
-        response = intent.suggestedResponse || "I'd be happy to help! What would you like to know?";
+        response = intent.suggestedResponse || `🤖 **I'm your Personal Journal Bot!** 
+
+I'm here to help you with your journaling journey. Here are the things I can do:
+
+📝 **Journaling**:
+• Type any message to create a journal entry
+• 🎤 Send voice messages - I'll transcribe them automatically!
+• 🎵 Send audio files - I'll convert speech to text
+
+🔍 **Querying Your Journal**:
+• /query <question> - Ask about your past entries
+• Example: "/query How was my mood last week?"
+
+📊 **Insights & Analytics**:
+• /summary - Get a summary of your recent entries
+• /stats - View your journaling statistics
+
+⏰ **Reminders**:
+• /remind <what> <when> - Set reminders for yourself
+
+What would you like to know about your journaling or how can I help you today?`;
       } else if (hasGreetingWords) {
         finalIntent = 'casual';
         confidence = Math.max(confidence, 0.6);
-        response = intent.suggestedResponse || "Hello! How can I help you today?";
+        response = intent.suggestedResponse || `👋 **Hello! I'm your Personal Journal Bot!** 
+
+I'm here to help you capture your thoughts, experiences, and reflections. Here's what I can do:
+
+📝 **Journaling**: Send me text messages or voice messages - I'll save them as journal entries
+🔍 **Querying**: Use /query <your question> to ask about your past entries  
+📊 **Summary**: Use /summary to get insights about your recent entries
+📈 **Stats**: Use /stats to see your journaling statistics
+⏰ **Reminders**: Use /remind to set reminders for yourself
+
+Start by sharing what's on your mind today - type or speak! ✨
+
+How can I help you with your journaling today?`;
       } else if (hasPersonalContent && hasFeelingWords) {
         finalIntent = 'journal';
         confidence = Math.max(confidence, 0.7);
@@ -566,7 +613,16 @@ ${totalEntries === 0 ?
       this.logger.error('Error handling low confidence message:', error);
       // Final fallback: save as journal entry
       await this.handleJournalEntry(msg);
-      await this.bot.sendMessage(chatId, "I've saved that as a journal entry. Feel free to ask me questions or just share your thoughts!", { parse_mode: 'Markdown' });
+      await this.bot.sendMessage(chatId, `📝 **I've saved that as a journal entry!** 
+
+I'm your Personal Journal Bot and I'm here to help you capture your thoughts and experiences. Here's what I can do:
+
+📝 **Journaling**: Send me any message to create journal entries
+🔍 **Querying**: Use /query <question> to ask about your past entries
+📊 **Insights**: Use /summary and /stats for analytics
+⏰ **Reminders**: Use /remind to set reminders
+
+Feel free to ask me questions or just share your thoughts! ✨`, { parse_mode: 'Markdown' });
     }
   }
 

@@ -142,8 +142,11 @@ Respond strictly as JSON: {
                 
                 // More comprehensive question detection
                 const hasQuestionMark = /\?$/.test(text);
-                const hasQuestionWords = /\b(what|how|why|when|where|who|which|can|could|would|will|do|does|is|are|was|were)\b/i.test(text);
-                const isQuestion = hasQuestionMark || hasQuestionWords;
+                // More intelligent question word detection - avoid common words that appear in statements
+                const hasQuestionWords = /\b(what|how|why|when|where|who|which|can|could|would|will)\b/i.test(text);
+                // Check for question patterns like "do you", "are you", "is this", etc.
+                const hasQuestionPatterns = /\b(do you|are you|is this|are they|can you|would you|could you|will you|have you|did you|does this|is that|are those)\b/i.test(text);
+                const isQuestion = hasQuestionMark || hasQuestionWords || hasQuestionPatterns;
                 
                 // More comprehensive casual chat detection
                 const hasGreetingWords = /\b(hello|hi|hey|good morning|good afternoon|good evening|morning|afternoon|evening)\b/i.test(text);
@@ -154,20 +157,32 @@ Respond strictly as JSON: {
                 // Enhanced journal entry detection
                 const hasPersonalPronouns = /\b(i|me|my|mine|myself|we|us|our|ours|ourselves)\b/i.test(text);
                 const hasFeelingWords = /\b(feel|felt|feeling|happy|sad|angry|excited|worried|anxious|calm|peaceful|stressed|relaxed|tired|energetic|confused|clear|sure|unsure|doubt|hope|wish|want|need|like|love|hate|miss|remember|forget)\b/i.test(text);
-                const hasExperienceWords = /\b(today|yesterday|tomorrow|week|month|year|morning|afternoon|evening|night|experience|happened|went|did|saw|heard|thought|realized|learned|discovered)\b/i.test(text);
+                const hasExperienceWords = /\b(today|yesterday|tomorrow|week|month|year|morning|afternoon|evening|night|experience|happened|went|did|saw|heard|thought|realized|learned|discovered|trip|travel|visited|explored|saw|enjoyed|had|spent|time|ocean|beach|nature|place|location|city|town|village|country)\b/i.test(text);
                 
-                const isJournalEntry = !isQuestion && !isCasual && (hasPersonalPronouns || hasFeelingWords || hasExperienceWords);
+                // More intelligent journal entry detection
+                const isJournalEntry = !isQuestion && !isCasual && (
+                    hasPersonalPronouns || 
+                    hasFeelingWords || 
+                    hasExperienceWords ||
+                    // Additional check for personal narrative structure
+                    (/\b(so|then|after|while|when|as|because|since)\b/i.test(text) && hasPersonalPronouns)
+                );
                 
                 // Calculate confidence based on indicators
                 let confidence = 0.4;
                 if (hasQuestionMark) confidence += 0.2;
                 if (hasQuestionWords) confidence += 0.1;
+                if (hasQuestionPatterns) confidence += 0.15;
                 if (hasGreetingWords || hasThanksWords || hasFarewellWords) confidence += 0.2;
-                if (hasPersonalPronouns) confidence += 0.1;
-                if (hasFeelingWords) confidence += 0.1;
-                if (hasExperienceWords) confidence += 0.1;
+                if (hasPersonalPronouns) confidence += 0.15;
+                if (hasFeelingWords) confidence += 0.15;
+                if (hasExperienceWords) confidence += 0.15;
                 
-                confidence = Math.min(confidence, 0.8); // Cap at 0.8
+                // Boost confidence for clearly personal content
+                if (hasPersonalPronouns && hasExperienceWords) confidence += 0.1;
+                if (/\b(so|then|after|while|when|as|because|since)\b/i.test(text) && hasPersonalPronouns) confidence += 0.1;
+                
+                confidence = Math.min(confidence, 0.9); // Cap at 0.9
                 
                 return {
                     isJournalEntry: isJournalEntry,
@@ -175,8 +190,8 @@ Respond strictly as JSON: {
                     isCasualChat: isCasual,
                     confidence: confidence,
                     rationale: 'AI parsing failed, using enhanced fallback heuristics',
-                    suggestedResponse: isQuestion ? "I'd be happy to help! What would you like to know?" : 
-                                      isCasual ? "Hello! How can I help you today?" : 
+                    suggestedResponse: isQuestion ? this.getQuestionResponse() : 
+                                      isCasual ? this.getCasualChatResponse() : 
                                       this.generateJournalResponse(text)
                 };
             }
@@ -188,11 +203,14 @@ Respond strictly as JSON: {
             
             // Check for obvious indicators even in error cases
             const hasQuestionMark = text.includes('?');
-            const hasQuestionWords = /\b(what|how|why|when|where|who|which|can|could|would|will|do|does|is|are|was|were)\b/i.test(text);
+            // More intelligent question word detection - avoid common words that appear in statements
+            const hasQuestionWords = /\b(what|how|why|when|where|who|which|can|could|would|will)\b/i.test(text);
+            // Check for question patterns like "do you", "are you", "is this", etc.
+            const hasQuestionPatterns = /\b(do you|are you|is this|are they|can you|would you|could you|will you|have you|did you|does this|is that|are those)\b/i.test(text);
             const hasGreetingWords = /\b(hello|hi|hey|good morning|good afternoon|good evening|morning|afternoon|evening)\b/i.test(text);
             const hasThanksWords = /\b(thanks|thank you|thx|ty|appreciate|grateful)\b/i.test(text);
             
-            let isQuestion = hasQuestionMark || hasQuestionWords;
+            let isQuestion = hasQuestionMark || hasQuestionWords || hasQuestionPatterns;
             let isCasual = hasGreetingWords || hasThanksWords;
             let isJournal = !isQuestion && !isCasual;
             
@@ -210,8 +228,8 @@ Respond strictly as JSON: {
                 isCasualChat: isCasual,
                 confidence: confidence,
                 rationale: 'Classification failed, using emergency fallback with content analysis',
-                suggestedResponse: isQuestion ? "I'd be happy to help! What would you like to know?" : 
-                                  isCasual ? "Hello! How can I help you today?" : 
+                suggestedResponse: isQuestion ? this.getQuestionResponse() : 
+                                  isCasual ? this.getCasualChatResponse() : 
                                   this.generateJournalResponse(text)
             };
         }
@@ -233,6 +251,46 @@ Respond strictly as JSON: {
         ];
         
         return responses[Math.floor(Math.random() * responses.length)];
+    }
+
+    private getQuestionResponse(): string {
+        return `🤖 **I'm your Personal Journal Bot!** 
+
+I'm here to help you with your journaling journey. Here are the things I can do:
+
+📝 **Journaling**:
+• Type any message to create a journal entry
+• 🎤 Send voice messages - I'll transcribe them automatically!
+• 🎵 Send audio files - I'll convert speech to text
+
+🔍 **Querying Your Journal**:
+• /query <question> - Ask about your past entries
+• Example: "/query How was my mood last week?"
+
+📊 **Insights & Analytics**:
+• /summary - Get a summary of your recent entries
+• /stats - View your journaling statistics
+
+⏰ **Reminders**:
+• /remind <what> <when> - Set reminders for yourself
+
+What would you like to know about your journaling or how can I help you today?`;
+    }
+
+    private getCasualChatResponse(): string {
+        return `👋 **Hello! I'm your Personal Journal Bot!** 
+
+I'm here to help you capture your thoughts, experiences, and reflections. Here's what I can do:
+
+📝 **Journaling**: Send me text messages or voice messages - I'll save them as journal entries
+🔍 **Querying**: Use /query <your question> to ask about your past entries  
+📊 **Summary**: Use /summary to get insights about your recent entries
+📈 **Stats**: Use /stats to see your journaling statistics
+⏰ **Reminders**: Use /remind to set reminders for yourself
+
+Start by sharing what's on your mind today - type or speak! ✨
+
+How can I help you with your journaling today?`;
     }
 
     private async speechToTextWithAssemblyAI(audioFilePath: string): Promise<string> {
