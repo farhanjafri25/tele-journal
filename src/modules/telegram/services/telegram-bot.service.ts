@@ -847,7 +847,7 @@ Feel free to ask me questions or just share your thoughts! ✨`, { parse_mode: '
       const userTimezone = 'Asia/Kolkata'; // TODO: Get from user preferences
       const aiResponse = await this.aiService.parseReminderRequest(reminderText, userTimezone);
       if (process.env.NODE_ENV !== 'production') {
-        console.log(`aiResponse received`);
+        console.log(`aiResponse received`, aiResponse);
       }
 
       // Check if AI returned tool calls - handle different response formats
@@ -868,11 +868,12 @@ Feel free to ask me questions or just share your thoughts! ✨`, { parse_mode: '
             chatId.toString(),
             toolResult.params
           );
-
+          console.log(`toolResult`, toolResult.params);
+          
           const scheduledTime = new Date(toolResult.params.scheduledAt).toLocaleString();
           await this.bot.sendMessage(
             chatId,
-            `✅ Reminder created\\!\n\n📝 **${escapeMarkdown(reminder.title)}**\n📅 Scheduled for: ${scheduledTime}\n🔄 Type: ${reminder.type}\n\n🆔 ID: \`${reminder.id}\``,
+            `✅ Reminder created!\n\n📝 *${escapeMarkdown(reminder.title)}*\n📅 Scheduled for: ${escapeMarkdown(toolResult?.params?.recurrencePattern?.timeOfDay)}\n🔄 Type: ${escapeMarkdown(reminder.type)}`,
             { parse_mode: 'Markdown' }
           );
         } else if (toolResult.action === 'match_reminders_for_deletion') {
@@ -923,7 +924,7 @@ Feel free to ask me questions or just share your thoughts! ✨`, { parse_mode: '
                   : 'Completed';
                 message += `${index + 1}. **${escapeMarkdown(match.reminder.title)}** (${Math.round(match.score)}%)\n`;
                 message += `   📅 Next: ${nextTime}\n`;
-                message += `   🆔 ID: \`${match.reminder.id}\`\n\n`;
+                
               });
             }
 
