@@ -924,7 +924,6 @@ Feel free to ask me questions or just share your thoughts! ✨`, { parse_mode: '
                   : 'Completed';
                 message += `${index + 1}. **${escapeMarkdown(match.reminder.title)}** (${Math.round(match.score)}%)\n`;
                 message += `   📅 Next: ${nextTime}\n`;
-                
               });
             }
 
@@ -1260,49 +1259,6 @@ Feel free to ask me questions or just share your thoughts! ✨`, { parse_mode: '
     } catch (error) {
       this.logger.error('Error testing reminders:', error);
       await this.bot.sendMessage(chatId, '❌ Error testing reminders.');
-    }
-  }
-
-  private async handleDebugRemindersCommand(msg: TelegramBot.Message) {
-    const chatId = msg.chat.id;
-    const telegramId = msg.from?.id;
-
-    if (!telegramId) {
-      return;
-    }
-
-    try {
-      const user = await this.userService.findByTelegramId(telegramId);
-      if (!user) {
-        await this.bot.sendMessage(chatId, 'Please start the bot first with /start');
-        return;
-      }
-
-      const reminders = await this.reminderService.getUserReminders(user.id);
-
-      let debugMessage = `🔍 **Debug Info for ${reminders.length} reminders:**\n\n`;
-
-      reminders.forEach((reminder, index) => {
-        const now = new Date();
-        const isDue = reminder.nextExecution && reminder.nextExecution <= now;
-
-        debugMessage += `${index + 1}. **${escapeMarkdown(reminder.title)}**\n`;
-        debugMessage += `   📅 Scheduled: ${reminder.scheduledAt?.toISOString()}\n`;
-        debugMessage += `   ⏰ Next Exec: ${reminder.nextExecution?.toISOString() || 'null'}\n`;
-        debugMessage += `   🔄 Type: ${reminder.type}\n`;
-        debugMessage += `   📊 Status: ${reminder.status}\n`;
-        debugMessage += `   ⚡ Due Now: ${isDue ? 'YES' : 'NO'}\n`;
-        debugMessage += `   🆔 ID: \`${reminder.id}\`\n\n`;
-      });
-
-      if (reminders.length === 0) {
-        debugMessage += "No reminders found.";
-      }
-
-      await this.bot.sendMessage(chatId, debugMessage, { parse_mode: 'Markdown' });
-    } catch (error) {
-      this.logger.error('Error debugging reminders:', error);
-      await this.bot.sendMessage(chatId, '❌ Error getting debug info.');
     }
   }
 
