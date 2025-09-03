@@ -211,12 +211,16 @@ export class TelegramBotService implements OnModuleInit {
           }
         } else if (intent.isQuestion && intent.confidence > confidenceThreshold) {
           // Handle as a question/query
-          await this.handleQuestion(msg, intent);
+          await this.handleQueryCommand(msg, msg.text);
+          // await this.handleQuestion(msg, intent);
         } else if (intent.isCasualChat && intent.confidence > confidenceThreshold) {
           // Handle as casual chat
           if (intent.suggestedResponse) {
             await this.bot.sendMessage(msg.chat.id, intent.suggestedResponse, { parse_mode: 'Markdown' });
           }
+        } else if (intent.isReminder && intent.confidence > confidenceThreshold) {
+          // Handle as reminder request
+          await this.handleReminderCommand(msg, msg.text);  
         } else {
           // Smart fallback based on intent hints and confidence
           await this.handleLowConfidenceMessage(msg, intent);
@@ -821,7 +825,7 @@ Feel free to ask me questions or just share your thoughts! ✨`, { parse_mode: '
   }
 
   // Reminder command handlers
-  private async handleReminderCommand(msg: TelegramBot.Message, match: RegExpExecArray | null) {
+  private async handleReminderCommand(msg: TelegramBot.Message, match: any | null) {
     const chatId = msg.chat.id;
     const telegramId = msg.from?.id;
 
@@ -838,7 +842,7 @@ Feel free to ask me questions or just share your thoughts! ✨`, { parse_mode: '
       await this.bot.sendChatAction(chatId, 'typing');
 
       // Parse reminder request with AI
-      const reminderText = match[1];
+      const reminderText = match;
       if (process.env.NODE_ENV !== 'production') {
         console.log(`reminderText`, reminderText);
       }

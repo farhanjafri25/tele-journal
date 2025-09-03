@@ -104,6 +104,7 @@ export class AiService {
         isJournalEntry: boolean; 
         isQuestion: boolean; 
         isCasualChat: boolean;
+        isReminder: boolean;
         confidence: number; 
         rationale?: string;
         suggestedResponse?: string;
@@ -112,10 +113,12 @@ export class AiService {
             const prompt = [
                 { 
                     role: 'system', 
-                    content: `You are an AI assistant that classifies user messages into three categories:
+                    content: `You are an AI assistant that classifies user messages into four categories:
 1. JOURNAL_ENTRY: Personal reflections, experiences, feelings, daily events, thoughts, memories
-2. QUESTION: Direct questions, requests for information, help, or advice
+2. QUESTION: Direct questions, requests for summary in regards to personal life, help with regards to his personal experience or journal, or advice
 3. CASUAL_CHAT: Greetings, casual conversation, small talk, thanks
+4. REMINDER: Direct Reminders, Requests to set reminders, or alarms, or schedule tasks
+Always choose the most appropriate single category that best fits the user's intent. If multiple categories seem relevant, prioritize in this order: QUESTION > REMINDER > CASUAL_CHAT > JOURNAL_ENTRY.
 
 Respond strictly as JSON: {
   "intent": "JOURNAL_ENTRY|QUESTION|CASUAL_CHAT",
@@ -130,13 +133,20 @@ Respond strictly as JSON: {
                 }
             ];
             
-            const res = await this.chat(prompt as any);
+            const res = await this.chat(prompt as any); 
+            console.log(`response`, res);
+                       
             try {
-                const parsed = JSON.parse(res);
+                let content = res.replace(/```json|```/g, '').trim();
+
+                const parsed = JSON.parse(content);
+                console.log(`parsed response`, parsed);
+                
                 return {
                     isJournalEntry: parsed.intent === 'JOURNAL_ENTRY',
                     isQuestion: parsed.intent === 'QUESTION',
                     isCasualChat: parsed.intent === 'CASUAL_CHAT',
+                    isReminder: parsed.intent === 'REMINDER',
                     confidence: Number(parsed.confidence) || 0.5,
                     rationale: parsed.reason,
                     suggestedResponse: parsed.response
@@ -193,6 +203,7 @@ Respond strictly as JSON: {
                     isJournalEntry: isJournalEntry,
                     isQuestion: isQuestion,
                     isCasualChat: isCasual,
+                    isReminder: false,
                     confidence: confidence,
                     rationale: 'AI parsing failed, using enhanced fallback heuristics',
                     suggestedResponse: isQuestion ? this.getQuestionResponse() : 
@@ -231,6 +242,7 @@ Respond strictly as JSON: {
                 isJournalEntry: isJournal,
                 isQuestion: isQuestion,
                 isCasualChat: isCasual,
+                isReminder: false,
                 confidence: confidence,
                 rationale: 'Classification failed, using emergency fallback with content analysis',
                 suggestedResponse: isQuestion ? this.getQuestionResponse() : 
