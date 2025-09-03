@@ -68,7 +68,12 @@ export class AiService {
             'do not let me forget',
             'i need to remember',
             'make a reminder',
-            'create a reminder'
+            'create a reminder',
+            'schedule a task',
+            'schedule a meeting',
+            'schedule a call',
+            'schedule a reminder',
+            'schedule a'
         ];
 
         const matched = keywordMatches.some(k => hay.includes(k));
