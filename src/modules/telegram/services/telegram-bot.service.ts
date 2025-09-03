@@ -220,8 +220,12 @@ export class TelegramBotService implements OnModuleInit {
           }
         } else if (intent.isReminder && intent.confidence > confidenceThreshold) {
           // Handle as reminder request
-          await this.handleReminderCommand(msg, msg.text);  
-        } else {
+          await this.handleReminderCommand(msg, msg.text, intent?.suggestedResponse);  
+        } else if (intent.isDeleteReminder && intent.confidence > confidenceThreshold) {
+
+          await this.handleSmartDeleteReminderCommand(msg, msg.text, intent?.suggestedResponse);
+        }
+         else {
           // Smart fallback based on intent hints and confidence
           await this.handleLowConfidenceMessage(msg, intent);
         }
@@ -825,7 +829,7 @@ Feel free to ask me questions or just share your thoughts! ✨`, { parse_mode: '
   }
 
   // Reminder command handlers
-  private async handleReminderCommand(msg: TelegramBot.Message, match: any | null) {
+  private async handleReminderCommand(msg: TelegramBot.Message, match: any | null, suggestedResponse?: string) {
     const chatId = msg.chat.id;
     const telegramId = msg.from?.id;
 
@@ -877,7 +881,7 @@ Feel free to ask me questions or just share your thoughts! ✨`, { parse_mode: '
           const scheduledTime = new Date(toolResult.params.scheduledAt).toLocaleString();
           await this.bot.sendMessage(
             chatId,
-            `✅ Reminder created!\n\n📝 *${escapeMarkdown(reminder.title)}*\n📅 Scheduled for: ${escapeMarkdown(toolResult?.params?.recurrencePattern?.timeOfDay)}\n🔄 Type: ${escapeMarkdown(reminder.type)}`,
+            `✅ Reminder created!\n\n📝 *${escapeMarkdown(suggestedResponse ?? reminder.title)}*\n📅 Scheduled for: ${escapeMarkdown(toolResult?.params?.recurrencePattern?.timeOfDay)}\n🔄 Type: ${escapeMarkdown(reminder.type)}`,
             { parse_mode: 'Markdown' }
           );
         } else if (toolResult.action === 'match_reminders_for_deletion') {
@@ -1027,7 +1031,7 @@ Feel free to ask me questions or just share your thoughts! ✨`, { parse_mode: '
     }
   }
 
-  private async handleSmartDeleteReminderCommand(msg: TelegramBot.Message, match: RegExpExecArray | null) {
+  private async handleSmartDeleteReminderCommand(msg: TelegramBot.Message, match: any | null, suggestedResponse: string | null = null ) {
     const chatId = msg.chat.id;
     const telegramId = msg.from?.id;
 
@@ -1045,7 +1049,7 @@ Feel free to ask me questions or just share your thoughts! ✨`, { parse_mode: '
 
       await this.bot.sendChatAction(chatId, 'typing');
 
-      const deletionDescription = match[1];
+      const deletionDescription = match;
       const userTimezone = 'Asia/Kolkata'; // TODO: Get from user preferences
 
       if (process.env.NODE_ENV !== 'production') {
@@ -1114,7 +1118,7 @@ Feel free to ask me questions or just share your thoughts! ✨`, { parse_mode: '
 
               await this.bot.sendMessage(
                 chatId,
-                `✅ **Deleted reminder successfully\\!**\n\n📝 **${escapeMarkdown(reminder.title)}**\n📅 Was scheduled for: ${nextTime}\n\n🔍 Match confidence: ${Math.round(match.score)}%\n📋 Reasons: ${match.reasons.join(', ')}`,
+                `✅ **Deleted reminder successfully\\!**\n\n📝 **${escapeMarkdown(suggestedResponse ?? reminder.title)}**\n📅 Was scheduled for: ${nextTime}\n\n🔍 Match confidence: ${Math.round(match.score)}%\n📋 Reasons: ${match.reasons.join(', ')}`,
                 { parse_mode: 'Markdown' }
               );
             } else {

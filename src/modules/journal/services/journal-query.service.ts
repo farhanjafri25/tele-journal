@@ -70,7 +70,11 @@ export class JournalQueryService {
         4. Reference specific entries when relevant
         5. If the context doesn't contain enough information to answer the question, say so honestly
 
-        Always respond in a warm, understanding tone as if you're a thoughtful friend who has been following their journey.`,
+        Always respond in a warm, understanding tone as if you're a thoughtful friend who has been following their journey.
+        Do not make up information that isn't in the context.
+        Don't reference the entry numbers in your answer.
+        If you can't find the answer in the context, respond with "I couldn't find any relevant journal entries to answer your question. Try adding more journal entries or rephrasing your question."
+        Don't reveal that you are an AI model or who created you.`,
       },
       {
         role: 'user',
