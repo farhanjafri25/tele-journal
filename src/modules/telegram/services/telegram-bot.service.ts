@@ -191,44 +191,7 @@ export class TelegramBotService implements OnModuleInit {
 
       // Handle text messages
       if (msg.text) {
-        if(msg?.text?.length && msg?.text?.length > 400) {
-          await this.bot.sendMessage(msg.chat.id, 'Sorry, I can\'t process messages longer than 400 characters yet.', { parse_mode: 'Markdown' });
-          return;
-        }
-        
-        // Detect message intent
-        const intent = await this.aiService.detectMessageIntent(msg.text);
-        this.logger.debug(`Message intent: ${JSON.stringify(intent)}`);
-        
-        // Lower confidence threshold for better intent detection
-        const confidenceThreshold = 0.3;
-        
-        if (intent.isJournalEntry && intent.confidence > confidenceThreshold) {
-          // Save as journal entry and provide conversational response
-          await this.handleJournalEntry(msg);
-          if (intent.suggestedResponse) {
-            await this.bot.sendMessage(msg.chat.id, intent.suggestedResponse, { parse_mode: 'Markdown' });
-          }
-        } else if (intent.isQuestion && intent.confidence > confidenceThreshold) {
-          // Handle as a question/query
-          await this.handleQueryCommand(msg, msg.text);
-          // await this.handleQuestion(msg, intent);
-        } else if (intent.isCasualChat && intent.confidence > confidenceThreshold) {
-          // Handle as casual chat
-          if (intent.suggestedResponse) {
-            await this.bot.sendMessage(msg.chat.id, intent.suggestedResponse, { parse_mode: 'Markdown' });
-          }
-        } else if (intent.isReminder && intent.confidence > confidenceThreshold) {
-          // Handle as reminder request
-          await this.handleReminderCommand(msg, msg.text, intent?.suggestedResponse);  
-        } else if (intent.isDeleteReminder && intent.confidence > confidenceThreshold) {
-
-          await this.handleSmartDeleteReminderCommand(msg, msg.text, intent?.suggestedResponse);
-        }
-         else {
-          // Smart fallback based on intent hints and confidence
-          await this.handleLowConfidenceMessage(msg, intent);
-        }
+        await this.processTextMessages(msg, msg.text);
         return;
       }
 
@@ -253,6 +216,48 @@ export class TelegramBotService implements OnModuleInit {
       }
     });
   }
+
+ async processTextMessages(msg: TelegramBot.Message, msgText: string) {
+    if(msg?.text?.length && msg?.text?.length > 400) {
+      await this.bot.sendMessage(msg.chat.id, 'Sorry, I can\'t process messages longer than 400 characters yet.', { parse_mode: 'Markdown' });
+      return;
+    }
+
+    // Detect message intent
+    const intent = await this.aiService.detectMessageIntent(msgText);
+    this.logger.debug(`Message intent: ${JSON.stringify(intent)}`);
+
+    // Lower confidence threshold for better intent detection
+    const confidenceThreshold = 0.3;
+
+    if (intent.isJournalEntry && intent.confidence > confidenceThreshold) {
+      // Save as journal entry and provide conversational response
+      await this.handleJournalEntry(msg);
+      if (intent.suggestedResponse) {
+        await this.bot.sendMessage(msg.chat.id, intent.suggestedResponse, { parse_mode: 'Markdown' });
+      }
+    } else if (intent.isQuestion && intent.confidence > confidenceThreshold) {
+      // Handle as a question/query
+      await this.handleQueryCommand(msg, msgText);
+      // await this.handleQuestion(msg, intent);
+    } else if (intent.isCasualChat && intent.confidence > confidenceThreshold) {
+      // Handle as casual chat
+      if (intent.suggestedResponse) {
+        await this.bot.sendMessage(msg.chat.id, intent.suggestedResponse, { parse_mode: 'Markdown' });
+      }
+    } else if (intent.isReminder && intent.confidence > confidenceThreshold) {
+      // Handle as reminder request
+      await this.handleReminderCommand(msg, msgText, intent?.suggestedResponse);  
+    } else if (intent.isDeleteReminder && intent.confidence > confidenceThreshold) {
+
+      await this.handleSmartDeleteReminderCommand(msg, msgText, intent?.suggestedResponse);
+    }
+     else {
+      // Smart fallback based on intent hints and confidence
+      await this.handleLowConfidenceMessage(msg, intent);
+    }
+    return;
+ }
 
   private async handleStartCommand(msg: TelegramBot.Message) {
     const chatId = msg.chat.id;
@@ -681,54 +686,59 @@ Feel free to ask me questions or just share your thoughts! ✨`, { parse_mode: '
         return;
       }
 
-      // Find or create user
-      const user = await this.userService.findOrCreateUser(telegramId, msg.from?.username);
 
-      // Classify intent: is this a reminder request?
-      const intent = await this.aiService.isReminderIntent(transcribedText);
+      await this.processTextMessages(msg, transcribedText);
 
-      if (intent.isReminder) {
-        // Parse with AI into reminder params
-        const userTimezone = 'Asia/Kolkata';
-        const aiResponse = await this.aiService.parseReminderRequest(transcribedText, userTimezone);
+      return;
 
-        const message = aiResponse.choices?.[0]?.message;
-        const toolCalls = message?.tool_calls || message?.toolCalls;
+      // // Find or create user
+      // const user = await this.userService.findOrCreateUser(telegramId, msg.from?.username);
 
-        if (toolCalls && toolCalls.length > 0) {
-          const toolCall = toolCalls[0];
-          const toolResult = await this.aiService.handleReminderToolCall(toolCall, user.id, chatId.toString());
+      // // Classify intent: is this a reminder request?
+      // const intent = await this.aiService.isReminderIntent(transcribedText);
 
-          if (toolResult.action === 'create_reminder') {
-            const reminder = await this.reminderService.createReminder(
-              user.id,
-              chatId.toString(),
-              toolResult.params
-            );
+      // if (intent.isReminder) {
+      //   // Parse with AI into reminder params
+      //   const userTimezone = 'Asia/Kolkata';
+      //   const aiResponse = await this.aiService.parseReminderRequest(transcribedText, userTimezone);
 
-            const scheduledTime = new Date(toolResult.params.scheduledAt).toLocaleString();
-            await this.bot.editMessageText(
-              `✅ Created reminder from your voice note!\n\n📝 ${reminder.title}\n📅 Scheduled for: ${scheduledTime}\n🔄 Type: ${reminder.type}`,
-              { chat_id: chatId, message_id: processingMsg.message_id }
-            );
-            return;
-          }
-        }
+      //   const message = aiResponse.choices?.[0]?.message;
+      //   const toolCalls = message?.tool_calls || message?.toolCalls;
 
-        // Fallback: could not parse as reminder
-        await this.bot.editMessageText(
-          `❔ I heard your voice but couldn't confidently create a reminder. Try phrasing like "Remind me to..." or use /remind`,
-          { chat_id: chatId, message_id: processingMsg.message_id }
-        );
-        return;
-      }
+      //   if (toolCalls && toolCalls.length > 0) {
+      //     const toolCall = toolCalls[0];
+      //     const toolResult = await this.aiService.handleReminderToolCall(toolCall, user.id, chatId.toString());
 
-      // Not a reminder intent: save as journal entry
-      await this.journalService.createEntry(user.id, transcribedText);
-      await this.bot.editMessageText(
-        `✅ Voice message saved!`,
-        { chat_id: chatId, message_id: processingMsg.message_id }
-      );
+      //     if (toolResult.action === 'create_reminder') {
+      //       const reminder = await this.reminderService.createReminder(
+      //         user.id,
+      //         chatId.toString(),
+      //         toolResult.params
+      //       );
+
+      //       const scheduledTime = new Date(toolResult.params.scheduledAt).toLocaleString();
+      //       await this.bot.editMessageText(
+      //         `✅ Created reminder from your voice note!\n\n📝 ${reminder.title}\n📅 Scheduled for: ${scheduledTime}\n🔄 Type: ${reminder.type}`,
+      //         { chat_id: chatId, message_id: processingMsg.message_id }
+      //       );
+      //       return;
+      //     }
+      //   }
+
+      //   // Fallback: could not parse as reminder
+      //   await this.bot.editMessageText(
+      //     `❔ I heard your voice but couldn't confidently create a reminder. Try phrasing like "Remind me to..." or use /remind`,
+      //     { chat_id: chatId, message_id: processingMsg.message_id }
+      //   );
+      //   return;
+      // }
+
+      // // Not a reminder intent: save as journal entry
+      // await this.journalService.createEntry(user.id, transcribedText);
+      // await this.bot.editMessageText(
+      //   `✅ Voice message saved!`,
+      //   { chat_id: chatId, message_id: processingMsg.message_id }
+      // );
     } catch (error) {
       this.logger.error('Error processing voice message:', error);
       await this.bot.sendMessage(chatId, '❌ Sorry, I couldn\'t process your voice message. Please try again.');
@@ -768,20 +778,24 @@ Feel free to ask me questions or just share your thoughts! ✨`, { parse_mode: '
         return;
       }
 
-      // Find or create user
-      const user = await this.userService.findOrCreateUser(telegramId, msg.from?.username);
+      await this.processTextMessages(msg, transcribedText);
 
-      // Save journal entry with transcribed text
-      await this.journalService.createEntry(user.id, transcribedText);
+      return;
 
-      // Update the processing message with success
-      await this.bot.editMessageText(
-        `✅ Audio message saved!\n\n📝 Transcribed: "${transcribedText}"`,
-        {
-          chat_id: chatId,
-          message_id: processingMsg.message_id,
-        }
-      );
+      // // Find or create user
+      // const user = await this.userService.findOrCreateUser(telegramId, msg.from?.username);
+
+      // // Save journal entry with transcribed text
+      // await this.journalService.createEntry(user.id, transcribedText);
+
+      // // Update the processing message with success
+      // await this.bot.editMessageText(
+      //   `✅ Audio message saved!\n\n📝 Transcribed: "${transcribedText}"`,
+      //   {
+      //     chat_id: chatId,
+      //     message_id: processingMsg.message_id,
+      //   }
+      // );
     } catch (error) {
       this.logger.error('Error processing audio message:', error);
       await this.bot.sendMessage(chatId, '❌ Sorry, I couldn\'t process your audio message. Please try again.');

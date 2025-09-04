@@ -117,7 +117,14 @@ export class ReminderMatcherService {
         suggestedScope = 'from_date';
       }
     }
-
+    console.log({
+      reminder,
+      score: Math.min(score, 100), // Cap at 100
+      reasons,
+      isRecurring,
+      suggestedScope
+    });
+    
     return {
       reminder,
       score: Math.min(score, 100), // Cap at 100
