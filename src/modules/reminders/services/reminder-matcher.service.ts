@@ -32,7 +32,7 @@ export class ReminderMatcherService {
 
     for (const reminder of userReminders) {
       const match = this.scoreReminder(reminder, matchParams, timezone);
-      if (match.score > 0) {
+      if (match.score > 60) {
         matches.push(match);
       }
     }

@@ -279,9 +279,8 @@ export class TelegramBotService implements OnModuleInit {
 I'm here to help you capture your thoughts, experiences, and reflections\\. Here's how I work:
 
 📝 **Journaling**: Send me text messages or 🎤 voice messages \\- I'll save them as journal entries
-🔍 **Querying**: Use /query <your question> to ask about your past entries
-📊 **Summary**: Use /summary to get insights about your recent entries
-📈 **Stats**: Use /stats to see your journaling statistics
+🔍 **Querying**: Ask about your past entries
+⏰ **Reminders**: Set reminders for yourself
 
 Start by sharing what's on your mind today \\- type or speak\\! ✨
       `;
@@ -306,17 +305,13 @@ Start by sharing what's on your mind today \\- type or speak\\! ✨
 • I'll automatically save and analyze your thoughts
 
 🔍 **Querying**:
-• /query <question> \\- Ask about your journal entries
-• Example: "/query How was my mood last week\\?"
-
-📊 **Insights**:
-• /summary \\- Get a summary of your recent entries
-• /stats \\- View your journaling statistics
+• Ask about your journal entries
+• Example: "How was my mood last week\\?"
 
 ⏰ **Reminders**:
-• /remind [text] \\- Create a smart reminder \\(e\\.g\\., "remind me to call mom tomorrow at 3pm"\\) 
-• /reminders \\- List all your active reminders
-• /delete\\_reminder [reminder description] \\- Cancel a specific reminder \\(e\\.g\\., "Delete my Reminder to go for groceries today at 6pm"\\) 
+• Create a smart reminder \\(e\\.g\\., "remind me to call mom tomorrow at 3pm"\\) 
+• List all your active reminders
+• Cancel a specific reminder \\(e\\.g\\., "Delete my Reminder to go for groceries today at 6pm"\\) 
 
 ❓ **Other**:
 • /help \\- Show this help message
@@ -510,15 +505,11 @@ I'm here to help you with your journaling journey. Here are the things I can do:
 • 🎵 Send audio files - I'll convert speech to text
 
 🔍 **Querying Your Journal**:
-• /query <question> - Ask about your past entries
-• Example: "/query How was my mood last week?"
-
-📊 **Insights & Analytics**:
-• /summary - Get a summary of your recent entries
-• /stats - View your journaling statistics
+• Ask about your past entries
+• Example: "How was my mood last week?"
 
 ⏰ **Reminders**:
-• /remind <what> <when> - Set reminders for yourself
+• Set reminders for yourself
 
 What would you like to know about your journaling or how can I help you today?`;
 
@@ -575,15 +566,11 @@ I'm here to help you with your journaling journey. Here are the things I can do:
 • 🎵 Send audio files - I'll convert speech to text
 
 🔍 **Querying Your Journal**:
-• /query <question> - Ask about your past entries
-• Example: "/query How was my mood last week?"
-
-📊 **Insights & Analytics**:
-• /summary - Get a summary of your recent entries
-• /stats - View your journaling statistics
+• Ask about your past entries
+• Example: "How was my mood last week?"
 
 ⏰ **Reminders**:
-• /remind <what> <when> - Set reminders for yourself
+• Set reminders for yourself
 
 What would you like to know about your journaling or how can I help you today?`;
       } else if (hasGreetingWords) {
@@ -594,10 +581,8 @@ What would you like to know about your journaling or how can I help you today?`;
 I'm here to help you capture your thoughts, experiences, and reflections. Here's what I can do:
 
 📝 **Journaling**: Send me text messages or voice messages - I'll save them as journal entries
-🔍 **Querying**: Use /query <your question> to ask about your past entries  
-📊 **Summary**: Use /summary to get insights about your recent entries
-📈 **Stats**: Use /stats to see your journaling statistics
-⏰ **Reminders**: Use /remind to set reminders for yourself
+🔍 **Querying**: Ask about your past entries  
+⏰ **Reminders**: Set reminders for yourself
 
 Start by sharing what's on your mind today - type or speak! ✨
 
@@ -631,9 +616,8 @@ How can I help you with your journaling today?`;
 I'm your Personal Journal Bot and I'm here to help you capture your thoughts and experiences. Here's what I can do:
 
 📝 **Journaling**: Send me any message to create journal entries
-🔍 **Querying**: Use /query <question> to ask about your past entries
-📊 **Insights**: Use /summary and /stats for analytics
-⏰ **Reminders**: Use /remind to set reminders
+🔍 **Querying**: Ask about your past entries
+⏰ **Reminders**: Set reminders for yourself
 
 Feel free to ask me questions or just share your thoughts! ✨`, { parse_mode: 'Markdown' });
     }
@@ -690,55 +674,6 @@ Feel free to ask me questions or just share your thoughts! ✨`, { parse_mode: '
       await this.processTextMessages(msg, transcribedText);
 
       return;
-
-      // // Find or create user
-      // const user = await this.userService.findOrCreateUser(telegramId, msg.from?.username);
-
-      // // Classify intent: is this a reminder request?
-      // const intent = await this.aiService.isReminderIntent(transcribedText);
-
-      // if (intent.isReminder) {
-      //   // Parse with AI into reminder params
-      //   const userTimezone = 'Asia/Kolkata';
-      //   const aiResponse = await this.aiService.parseReminderRequest(transcribedText, userTimezone);
-
-      //   const message = aiResponse.choices?.[0]?.message;
-      //   const toolCalls = message?.tool_calls || message?.toolCalls;
-
-      //   if (toolCalls && toolCalls.length > 0) {
-      //     const toolCall = toolCalls[0];
-      //     const toolResult = await this.aiService.handleReminderToolCall(toolCall, user.id, chatId.toString());
-
-      //     if (toolResult.action === 'create_reminder') {
-      //       const reminder = await this.reminderService.createReminder(
-      //         user.id,
-      //         chatId.toString(),
-      //         toolResult.params
-      //       );
-
-      //       const scheduledTime = new Date(toolResult.params.scheduledAt).toLocaleString();
-      //       await this.bot.editMessageText(
-      //         `✅ Created reminder from your voice note!\n\n📝 ${reminder.title}\n📅 Scheduled for: ${scheduledTime}\n🔄 Type: ${reminder.type}`,
-      //         { chat_id: chatId, message_id: processingMsg.message_id }
-      //       );
-      //       return;
-      //     }
-      //   }
-
-      //   // Fallback: could not parse as reminder
-      //   await this.bot.editMessageText(
-      //     `❔ I heard your voice but couldn't confidently create a reminder. Try phrasing like "Remind me to..." or use /remind`,
-      //     { chat_id: chatId, message_id: processingMsg.message_id }
-      //   );
-      //   return;
-      // }
-
-      // // Not a reminder intent: save as journal entry
-      // await this.journalService.createEntry(user.id, transcribedText);
-      // await this.bot.editMessageText(
-      //   `✅ Voice message saved!`,
-      //   { chat_id: chatId, message_id: processingMsg.message_id }
-      // );
     } catch (error) {
       this.logger.error('Error processing voice message:', error);
       await this.bot.sendMessage(chatId, '❌ Sorry, I couldn\'t process your voice message. Please try again.');
@@ -781,21 +716,6 @@ Feel free to ask me questions or just share your thoughts! ✨`, { parse_mode: '
       await this.processTextMessages(msg, transcribedText);
 
       return;
-
-      // // Find or create user
-      // const user = await this.userService.findOrCreateUser(telegramId, msg.from?.username);
-
-      // // Save journal entry with transcribed text
-      // await this.journalService.createEntry(user.id, transcribedText);
-
-      // // Update the processing message with success
-      // await this.bot.editMessageText(
-      //   `✅ Audio message saved!\n\n📝 Transcribed: "${transcribedText}"`,
-      //   {
-      //     chat_id: chatId,
-      //     message_id: processingMsg.message_id,
-      //   }
-      // );
     } catch (error) {
       this.logger.error('Error processing audio message:', error);
       await this.bot.sendMessage(chatId, '❌ Sorry, I couldn\'t process your audio message. Please try again.');
