@@ -106,6 +106,7 @@ export class AiService {
         isCasualChat: boolean;
         isReminder: boolean;
         isDeleteReminder: boolean;
+        isListReminder: boolean;
         confidence: number; 
         rationale?: string;
         suggestedResponse?: string;
@@ -120,10 +121,11 @@ export class AiService {
 3. CASUAL_CHAT: Greetings, casual conversation, small talk, thanks
 4. REMINDER: Direct Reminders, Requests to set reminders, or alarms, or schedule tasks
 5. DELETE_REMINDER: Delete Reminders, Cancel Reminders, Remove Reminders, Cancel scheduled tasks
+6. LIST_REMINDERS: List Reminders, Show Reminders, View Reminders, Upcoming Reminders
 Always choose the most appropriate single category that best fits the user's intent. If multiple categories seem relevant, prioritize in this order: QUESTION > REMINDER > CASUAL_CHAT > JOURNAL_ENTRY.
 
 Respond strictly as JSON: {
-  "intent": "JOURNAL_ENTRY|QUESTION|CASUAL_CHAT|REMINDER|DELETE_REMINDER",
+  "intent": "JOURNAL_ENTRY|QUESTION|CASUAL_CHAT|REMINDER|DELETE_REMINDER|LIST_REMINDERS",
   "confidence": number (0-1),
   "reason": "brief explanation",
   "response": "appropriate conversational response"
@@ -150,6 +152,7 @@ Respond strictly as JSON: {
                     isCasualChat: parsed.intent === 'CASUAL_CHAT',
                     isReminder: parsed.intent === 'REMINDER',
                     isDeleteReminder: parsed.intent === 'DELETE_REMINDER',
+                    isListReminder: parsed.intent === 'LIST_REMINDERS',
                     confidence: Number(parsed.confidence) || 0.5,
                     rationale: parsed.reason,
                     suggestedResponse: parsed.response
@@ -208,6 +211,7 @@ Respond strictly as JSON: {
                     isCasualChat: isCasual,
                     isReminder: false,
                     isDeleteReminder: false,
+                    isListReminder: false,
                     confidence: confidence,
                     rationale: 'AI parsing failed, using enhanced fallback heuristics',
                     suggestedResponse: isQuestion ? this.getQuestionResponse() : 
@@ -248,6 +252,7 @@ Respond strictly as JSON: {
                 isCasualChat: isCasual,
                 isReminder: false,
                 isDeleteReminder: false,
+                isListReminder: false,
                 confidence: confidence,
                 rationale: 'Classification failed, using emergency fallback with content analysis',
                 suggestedResponse: isQuestion ? this.getQuestionResponse() : 

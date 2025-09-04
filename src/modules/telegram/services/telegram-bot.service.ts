@@ -139,41 +139,41 @@ export class TelegramBotService implements OnModuleInit {
     });
 
     // Query command
-    this.bot.onText(/\/query (.+)/, async (msg, match) => {
-      await this.executeCommandSafely(msg, async () => {
-        if (match && match[1]) {
-          await this.handleQueryCommand(msg, match[1]);
-        }
-      });
-    });
+    // this.bot.onText(/\/query (.+)/, async (msg, match) => {
+    //   await this.executeCommandSafely(msg, async () => {
+    //     if (match && match[1]) {
+    //       await this.handleQueryCommand(msg, match[1]);
+    //     }
+    //   });
+    // });
 
     // Summary command
-    this.bot.onText(/\/summary/, async (msg) => {
-      await this.executeCommandSafely(msg, () => this.handleSummaryCommand(msg));
-    });
+    // this.bot.onText(/\/summary/, async (msg) => {
+    //   await this.executeCommandSafely(msg, () => this.handleSummaryCommand(msg));
+    // });
 
     // Stats command
-    this.bot.onText(/\/stats/, async (msg) => {
-      await this.executeCommandSafely(msg, () => this.handleStatsCommand(msg));
-    });
+    // this.bot.onText(/\/stats/, async (msg) => {
+    //   await this.executeCommandSafely(msg, () => this.handleStatsCommand(msg));
+    // });
 
     // Reminder commands
-    this.bot.onText(/\/remind (.+)/, async (msg, match) => {
-      await this.executeCommandSafely(msg, () => this.handleReminderCommand(msg, match));
-    });
+    // this.bot.onText(/\/remind (.+)/, async (msg, match) => {
+    //   await this.executeCommandSafely(msg, () => this.handleReminderCommand(msg, match));
+    // });
 
-    this.bot.onText(/\/reminders/, async (msg) => {
-      await this.executeCommandSafely(msg, () => this.handleListRemindersCommand(msg));
-    });
+    // this.bot.onText(/\/reminders/, async (msg) => {
+    //   await this.executeCommandSafely(msg, () => this.handleListRemindersCommand(msg));
+    // });
 
-    this.bot.onText(/\/cancel_reminder (.+)/, async (msg, match) => {
-      await this.executeCommandSafely(msg, () => this.handleCancelReminderCommand(msg, match));
-    });
+    // this.bot.onText(/\/cancel_reminder (.+)/, async (msg, match) => {
+    //   await this.executeCommandSafely(msg, () => this.handleCancelReminderCommand(msg, match));
+    // });
 
     // Smart reminder deletion command
-    this.bot.onText(/\/delete_reminder (.+)/, async (msg, match) => {
-      await this.executeCommandSafely(msg, () => this.handleSmartDeleteReminderCommand(msg, match));
-    });
+    // this.bot.onText(/\/delete_reminder (.+)/, async (msg, match) => {
+    //   await this.executeCommandSafely(msg, () => this.handleSmartDeleteReminderCommand(msg, match));
+    // });
   }
 
   private setupMessageHandlers() {
@@ -251,6 +251,8 @@ export class TelegramBotService implements OnModuleInit {
     } else if (intent.isDeleteReminder && intent.confidence > confidenceThreshold) {
 
       await this.handleSmartDeleteReminderCommand(msg, msgText, intent?.suggestedResponse);
+    } else if (intent.isListReminder && intent.confidence > confidenceThreshold) {
+        await this.handleListRemindersCommand(msg);
     }
      else {
       // Smart fallback based on intent hints and confidence

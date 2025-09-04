@@ -373,7 +373,6 @@ export class ReminderService {
       if (reminder.description) {
         message += `   📝 ${escapeMarkdown(reminder.description)}\n`;
       }
-      message += `   🆔 ID: \`${reminder.id}\`\n\n`;
     });
 
     return message;
