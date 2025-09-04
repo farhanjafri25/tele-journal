@@ -8,17 +8,13 @@ export const DEFAULT_MESSAGE_FOR_WRONG_COMMAND = `
 • I'll automatically save and analyze your thoughts
 
 🔍 **Querying**:
-• /query <question> \\- Ask about your journal entries
-• Example: "/query How was my mood last week\\?"
-
-📊 **Insights**:
-• /summary \\- Get a summary of your recent entries
-• /stats \\- View your journaling statistics
+• Ask about your journal entries
+• Example: "How was my mood last week\\?"
 
 ⏰ **Reminders**:
-• /remind [text] \\- Create a smart reminder \\(e\\.g\\., "remind me to call mom tomorrow at 3pm"\\) 
-• /reminders \\- List all your active reminders
-• /delete\\_reminder [reminder description] \\- Cancel a specific reminder \\(e\\.g\\., "Delete my Reminder to go for groceries today at 6pm"\\) 
+• Create a smart reminder \\(e\\.g\\., "remind me to call mom tomorrow at 3pm"\\) 
+• List all your active reminders
+• Cancel a specific reminder \\(e\\.g\\., "Delete my Reminder to go for groceries today at 6pm"\\) 
 
 ❓ **Other**:
 • /help \\- Show this help message
@@ -41,17 +37,13 @@ export const MULTIPLE_COMMANDS_ERROR = `
 • I'll automatically save and analyze your thoughts
 
 🔍 **Querying**:
-• /query <question> \\- Ask about your journal entries
-• Example: "/query How was my mood last week\\?"
-
-📊 **Insights**:
-• /summary \\- Get a summary of your recent entries
-• /stats \\- View your journaling statistics
+• Ask about your journal entries
+• Example: "How was my mood last week\\?"
 
 ⏰ **Reminders**:
-• /remind [text] \\- Create a smart reminder \\(e\\.g\\., "remind me to call mom tomorrow at 3pm"\\) 
-• /reminders \\- List all your active reminders
-• /delete\\_reminder [reminder description] \\- Cancel a specific reminder \\(e\\.g\\., "Delete my Reminder to go for groceries today at 6pm"\\) 
+• Create a smart reminder \\(e\\.g\\., "remind me to call mom tomorrow at 3pm"\\) 
+• List all your active reminders
+• Cancel a specific reminder \\(e\\.g\\., "Delete my Reminder to go for groceries today at 6pm"\\) 
 
 ❓ **Other**:
 • /help \\- Show this help message
@@ -64,4 +56,4 @@ export const MULTIPLE_COMMANDS_ERROR = `
 • Regular journaling helps me understand you better\\!
     `;
 
-export const QUERY_COMMANDS = ["/query", "/start", "/help", "/summary", "/stats", "/remind", "/reminders", "/delete_reminder", "/cancel_reminder"];
+export const QUERY_COMMANDS = ["/start", "/help"];
