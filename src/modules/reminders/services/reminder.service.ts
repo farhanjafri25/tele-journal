@@ -202,10 +202,12 @@ export class ReminderService {
     console.log(`inside calculateInitialRecurringExecution`, scheduledTime, type, pattern, now, candidate);
     
     // Set the time of day if specified in pattern
-    if (pattern?.timeOfDay) {
-      const [hours, minutes] = pattern.timeOfDay.split(':').map(Number);
-      candidate.setHours(hours, minutes, 0, 0);
-    }
+    // if (pattern?.timeOfDay) {
+    //   const [hours, minutes] = pattern.timeOfDay.split(':').map(Number);
+    //   candidate.setHours(hours, minutes, 0, 0);
+    // }
+    console.log(`after setting timeOfDay`, candidate);
+    
 
     switch (type) {
       case ReminderType.DAILY:
