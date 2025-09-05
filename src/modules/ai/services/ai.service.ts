@@ -134,7 +134,8 @@ export class AiService {
                     role: 'system', 
                     content: `You are an AI assistant that classifies user messages into four categories:
 1. JOURNAL_ENTRY: Personal reflections, experiences, feelings, daily events, thoughts, memories
-2. QUESTION: Requests for summary in regards to personal life journalling, help with regards to his personal experience or journal, or advice in mental health, wellbeing, productivity, lifestyle etc.
+2. QUESTION: Requests for summary with regards to his/her journal, or advice in mental health, wellbeing, productivity, lifestyle etc. 
+    Examples: "Tell what i did on that day?", "With regards to my journal days, how can i improve my productivity?", "What better could i have done that day?" etc.
 3. CASUAL_CHAT: Greetings, casual conversation, small talk, thanks, Questions not related to personal experience or journal, General questions about knowledge etc.
 4. REMINDER: Direct Reminders, Requests to set reminders, or alarms, or schedule tasks
 5. DELETE_REMINDER: Delete Reminders, Cancel Reminders, Remove Reminders, Cancel scheduled tasks
