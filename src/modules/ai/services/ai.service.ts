@@ -100,6 +100,23 @@ export class AiService {
         }
     }
 
+    async answerGeneralQuestions(text: string): Promise<string> {
+        try {
+            const prompt = [
+                { role: 'system', content: `You are a helpful AI assistant that answers general questions. If you do not know the answer, respond with "I am not sure about that.". 
+                    Make sure the answer is precise and do not use much tokens make the answer as short as possible. 
+                    For bigger questions like maths calculation or anything return the response as "I can help you with journalings and reminders, and some short questions!"` },
+                { role: 'user', content: text }
+            ];
+            const res = await this.chat(prompt as any);
+            console.log(`response of general question`, res);
+            return res;
+        } catch (err) {
+            this.logger.warn('General question answering failed', err as any);
+            return "I'm sorry, I couldn't process your question right now.";
+        }
+    }
+
     async detectMessageIntent(text: string): Promise<{ 
         isJournalEntry: boolean; 
         isQuestion: boolean; 
@@ -117,8 +134,8 @@ export class AiService {
                     role: 'system', 
                     content: `You are an AI assistant that classifies user messages into four categories:
 1. JOURNAL_ENTRY: Personal reflections, experiences, feelings, daily events, thoughts, memories
-2. QUESTION: Direct questions, requests for summary in regards to personal life, help with regards to his personal experience or journal, or advice
-3. CASUAL_CHAT: Greetings, casual conversation, small talk, thanks
+2. QUESTION: Requests for summary in regards to personal life journalling, help with regards to his personal experience or journal, or advice in mental health, wellbeing, productivity, lifestyle etc.
+3. CASUAL_CHAT: Greetings, casual conversation, small talk, thanks, Questions not related to personal experience or journal, General questions about knowledge etc.
 4. REMINDER: Direct Reminders, Requests to set reminders, or alarms, or schedule tasks
 5. DELETE_REMINDER: Delete Reminders, Cancel Reminders, Remove Reminders, Cancel scheduled tasks
 6. LIST_REMINDERS: List Reminders, Show Reminders, View Reminders, Upcoming Reminders
