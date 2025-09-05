@@ -783,7 +783,6 @@ Feel free to ask me questions or just share your thoughts! ✨`, { parse_mode: '
           );
           console.log(`toolResult`, toolResult.params);
           
-          const scheduledTime = new Date(toolResult.params.scheduledAt).toLocaleString();
           await this.bot.sendMessage(
             chatId,
             `✅ Reminder created!\n\n📝 *${escapeMarkdown(suggestedResponse ?? reminder.title)}*\n📅 Scheduled for: ${escapeMarkdown(toolResult?.params?.recurrencePattern?.timeOfDay)}\n🔄 Type: ${escapeMarkdown(reminder.type)}`,

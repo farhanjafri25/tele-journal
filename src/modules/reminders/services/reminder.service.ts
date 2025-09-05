@@ -173,6 +173,8 @@ export class ReminderService {
     pattern?: any,
     isInitialScheduling: boolean = false
   ): Date | null {
+    console.log(`inside calculateNextExecution`, currentTime, type, pattern, isInitialScheduling);
+    
     if (type === ReminderType.ONCE) {
       // For one-time reminders, the next execution is the scheduled time itself
       return new Date(currentTime);
@@ -197,7 +199,8 @@ export class ReminderService {
   ): Date | null {
     const now = new Date();
     const candidate = new Date(scheduledTime);
-
+    console.log(`inside calculateInitialRecurringExecution`, scheduledTime, type, pattern, now, candidate);
+    
     // Set the time of day if specified in pattern
     if (pattern?.timeOfDay) {
       const [hours, minutes] = pattern.timeOfDay.split(':').map(Number);
