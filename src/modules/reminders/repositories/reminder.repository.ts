@@ -39,17 +39,6 @@ export class ReminderRepository {
   async findDueReminders(currentTime: Date = new Date()): Promise<Reminder[]> {
     console.log(`currentTime`, currentTime);
 
-    // First, let's see all active reminders
-    const allActive = await this.reminderRepo.find({
-      where: { status: ReminderStatus.ACTIVE },
-      relations: ['user'],
-    });
-
-    console.log(`Total active reminders:`, allActive.length);
-    allActive.forEach(reminder => {
-      console.log(`Reminder ${reminder.id}: nextExecution=${reminder.nextExecution}, due=${reminder.nextExecution <= currentTime}`);
-    });
-
     const dueReminders = this.reminderRepo.find({
       where: {
         status: ReminderStatus.ACTIVE,
