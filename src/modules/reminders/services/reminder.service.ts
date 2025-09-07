@@ -78,7 +78,7 @@ export class ReminderService {
       // Ensure the date is in the future
       if (scheduledAt < new Date()) {
         this.logger.warn('Scheduled date is in the past, adjusting to future');
-        scheduledAt.setTime(Date.now() + 60000); // Add 1 minute
+        // scheduledAt.setTime(Date.now() + 60000); // Add 1 minute
       }
 
       const nextExecution = this.calculateNextExecution(scheduledAt, params.type as ReminderType, params.recurrencePattern, true);
@@ -199,7 +199,7 @@ export class ReminderService {
   ): Date | null {
     const now = new Date();
     const candidate = new Date(scheduledTime);
-    console.log(`inside calculateInitialRecurringExecution`, scheduledTime, type, pattern, now, candidate);
+    console.log(`inside calculateInitialRecurringExecution neww`, scheduledTime, type, pattern, now, candidate);
     
     // Set the time of day if specified in pattern
     // if (pattern?.timeOfDay) {
