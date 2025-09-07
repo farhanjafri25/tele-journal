@@ -22,7 +22,7 @@ export const reminderTools = [
           },
           scheduledAt: {
             type: "string",
-            description: "ISO 8601 datetime when the reminder should first trigger"
+            description: "UTC datetime string when the reminder should first trigger"
           },
           recurrencePattern: {
             type: "object",
